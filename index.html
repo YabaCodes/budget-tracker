@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#111827" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Budget Tracker" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="styles.css" />
+  <title>Budget Tracker</title>
+</head>
+<body>
+  <main class="container">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Personal finance</p>
+        <h1>Budget Tracker</h1>
+      </div>
+      <button id="resetMonthBtn" class="secondary">Reset month</button>
+    </header>
+
+    <section class="summary-grid">
+      <article class="card emphasis">
+        <span>Monthly budget</span>
+        <strong id="monthlyBudget">NT$0</strong>
+      </article>
+      <article class="card">
+        <span>Spent this month</span>
+        <strong id="monthlySpent">NT$0</strong>
+      </article>
+      <article class="card">
+        <span>Remaining</span>
+        <strong id="monthlyRemaining">NT$0</strong>
+      </article>
+      <article class="card">
+        <span>Cash reserve</span>
+        <strong id="cashReserve">NT$76,000</strong>
+      </article>
+    </section>
+
+    <section class="card goal-card">
+      <div class="goal-row">
+        <div>
+          <span>Cash reserve goal</span>
+          <strong>NT$300,000</strong>
+        </div>
+        <div class="goal-number" id="goalPercent">0%</div>
+      </div>
+      <div class="progress">
+        <div id="goalBar" class="progress-bar"></div>
+      </div>
+      <div class="cash-edit">
+        <label for="cashInput">Current cash reserve</label>
+        <div class="inline-input">
+          <input id="cashInput" type="number" min="0" step="1" inputmode="numeric" />
+          <button id="saveCashBtn">Save</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Add expense</h2>
+      <form id="expenseForm" class="form-grid">
+        <label>
+          Amount (NT$)
+          <input id="amount" type="number" min="1" step="1" inputmode="decimal" required placeholder="e.g. 180" />
+        </label>
+        <label>
+          Category
+          <select id="category" required></select>
+        </label>
+        <label>
+          Date
+          <input id="date" type="date" required />
+        </label>
+        <label class="full">
+          Note (optional)
+          <input id="note" type="text" maxlength="80" placeholder="Lunch, Uber, groceries..." />
+        </label>
+        <button class="primary full" type="submit">+ Add expense</button>
+      </form>
+      <p id="formMessage" class="message" aria-live="polite"></p>
+    </section>
+
+    <section class="card">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">This month</p>
+          <h2>Category budgets</h2>
+        </div>
+        <button id="editBudgetsBtn" class="secondary">Edit budgets</button>
+      </div>
+      <div id="categoryList" class="category-list"></div>
+    </section>
+
+    <section class="card" id="budgetEditor" hidden>
+      <div class="section-head">
+        <h2>Edit monthly budgets</h2>
+        <button id="closeBudgetsBtn" class="secondary">Close</button>
+      </div>
+      <div id="budgetFields" class="budget-fields"></div>
+      <button id="saveBudgetsBtn" class="primary">Save budgets</button>
+    </section>
+
+    <section class="card">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">History</p>
+          <h2>Recent expenses</h2>
+        </div>
+        <button id="clearExpensesBtn" class="danger">Clear expenses</button>
+      </div>
+      <div id="expenseList" class="expense-list"></div>
+    </section>
+
+    <section class="card footer-note">
+      <strong>How it works</strong>
+      <p>Every expense is saved on this device. The app totals spending by category and subtracts it from your monthly budget automatically.</p>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
