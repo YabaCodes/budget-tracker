@@ -36,12 +36,16 @@
 
   const $ = id => document.getElementById(id);
 
+  function cloneFallback(value){
+    return JSON.parse(JSON.stringify(value));
+  }
+
   function loadJSON(key, fallback){
     try {
       const raw = localStorage.getItem(key);
-      return raw ? JSON.parse(raw) : structuredClone(fallback);
+      return raw ? JSON.parse(raw) : cloneFallback(fallback);
     } catch {
-      return structuredClone(fallback);
+      return cloneFallback(fallback);
     }
   }
 
@@ -82,6 +86,7 @@
 
   function renderCategorySelect(){
     const sel = $("category");
+    const previous = sel.value;
     sel.innerHTML = "";
     for (const name of Object.keys(budgets)) {
       const opt = document.createElement("option");
@@ -89,6 +94,7 @@
       opt.textContent = name;
       sel.appendChild(opt);
     }
+    if (previous && budgets[previous] !== undefined) sel.value = previous;
   }
 
   function renderCategories(){
@@ -124,22 +130,50 @@
       return b.date.localeCompare(a.date);
     });
     wrap.innerHTML = "";
+
     if (!rows.length) {
       wrap.innerHTML = `<div class="empty">No expenses entered yet this month.</div>`;
       return;
     }
+
     for (const e of rows.slice(0,50)) {
       const row = document.createElement("div");
       row.className = "expense-row";
-      row.innerHTML = `
-        <div class="expense-top">
-          <div>
-            <div class="expense-name">${escapeHtml(e.category)}</div>
-            <div class="expense-meta">${escapeHtml(e.date)}${e.note ? " · " + escapeHtml(e.note) : ""}</div>
-          </div>
-          <strong>${money(e.amount)}</strong>
-        </div>
+
+      const top = document.createElement("div");
+      top.className = "expense-top";
+
+      const left = document.createElement("div");
+      left.innerHTML = `
+        <div class="expense-name">${escapeHtml(e.category)}</div>
+        <div class="expense-meta">${escapeHtml(e.date)}${e.note ? " · " + escapeHtml(e.note) : ""}</div>
       `;
+
+      const right = document.createElement("div");
+      right.className = "expense-actions";
+
+      const amount = document.createElement("strong");
+      amount.textContent = money(e.amount);
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.className = "delete-expense";
+      deleteBtn.textContent = "Delete";
+      deleteBtn.setAttribute("aria-label", `Delete ${e.category} expense of ${money(e.amount)}`);
+      deleteBtn.addEventListener("click", () => {
+        const ok = confirm(`Delete this ${e.category} expense of ${money(e.amount)}?`);
+        if (!ok) return;
+
+        expenses = expenses.filter(item => item.id !== e.id);
+        persist();
+        renderAll();
+      });
+
+      right.appendChild(amount);
+      right.appendChild(deleteBtn);
+      top.appendChild(left);
+      top.appendChild(right);
+      row.appendChild(top);
       wrap.appendChild(row);
     }
   }
@@ -191,13 +225,14 @@
     }
 
     expenses.push({
-      id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(),
+      id: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random()),
       amount: Math.round(amount),
       category,
       date,
       note,
       createdAt: Date.now()
     });
+
     persist();
     $("expenseForm").reset();
     $("date").value = todayISO();
@@ -217,9 +252,11 @@
     $("budgetEditor").hidden = false;
     renderBudgetEditor();
   });
+
   $("closeBudgetsBtn").addEventListener("click", () => {
     $("budgetEditor").hidden = true;
   });
+
   $("saveBudgetsBtn").addEventListener("click", () => {
     const inputs = $("budgetFields").querySelectorAll("input[data-category]");
     inputs.forEach(input => {

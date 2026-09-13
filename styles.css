@@ -63,12 +63,12 @@ h2{font-size:19px;margin-bottom:14px}
   width:100%;margin-top:6px;padding:12px;border:1px solid #d1d5db;border-radius:12px;background:white;font-size:16px
 }
 .full{grid-column:1/-1}
-.primary,.secondary,.danger{
+.primary,.secondary,.danger,.delete-expense{
   border-radius:12px;padding:10px 14px;border:1px solid transparent;font-weight:700
 }
 .primary{background:var(--accent);color:white}
 .secondary{background:white;border-color:#d1d5db;color:var(--text)}
-.danger{background:white;border-color:#fecaca;color:var(--danger)}
+.danger,.delete-expense{background:white;border-color:#fecaca;color:var(--danger)}
 .message{min-height:20px;font-size:13px;margin:10px 0 0;color:var(--success)}
 .category-list,.expense-list{display:flex;flex-direction:column;gap:10px}
 .category-row,.expense-row{
@@ -80,6 +80,19 @@ h2{font-size:19px;margin-bottom:14px}
 }
 .category-name,.expense-name{font-weight:700}
 .category-meta,.expense-meta{font-size:12px;color:var(--muted)}
+.expense-actions{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-end;
+  gap:8px;
+}
+.expense-actions strong{font-size:16px}
+.delete-expense{
+  min-height:36px;
+  padding:7px 10px;
+  border-radius:10px;
+  font-size:13px;
+}
 .bar{height:7px;background:#eef0f3;border-radius:999px;overflow:hidden}
 .bar > div{height:100%;background:var(--success)}
 .bar > div.warn{background:var(--warn)}
