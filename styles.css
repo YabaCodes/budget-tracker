@@ -23,14 +23,20 @@ button{min-height:44px;cursor:pointer}
   margin:0 auto;
   padding:calc(18px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom));
 }
-.topbar,.section-head,.goal-row,.inline-input{
+.topbar,.section-head,.goal-row,.inline-input,.data-actions{
   display:flex;align-items:center;justify-content:space-between;gap:12px;
 }
+.topbar{align-items:flex-end}
 h1,h2,p{margin-top:0}
 h1{font-size:28px;margin-bottom:0}
 h2{font-size:19px;margin-bottom:14px}
 .eyebrow{
   text-transform:uppercase;letter-spacing:.08em;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px
+}
+.month-control{display:flex;flex-direction:column;gap:5px;min-width:145px}
+.month-control label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.month-control select{
+  min-height:42px;padding:8px 10px;border:1px solid #d1d5db;border-radius:11px;background:white;font-size:15px
 }
 .summary-grid{
   display:grid;
@@ -63,13 +69,15 @@ h2{font-size:19px;margin-bottom:14px}
   width:100%;margin-top:6px;padding:12px;border:1px solid #d1d5db;border-radius:12px;background:white;font-size:16px
 }
 .full{grid-column:1/-1}
-.primary,.secondary,.danger,.delete-expense{
+.primary,.secondary,.danger,.delete-expense,.file-button{
   border-radius:12px;padding:10px 14px;border:1px solid transparent;font-weight:700
 }
 .primary{background:var(--accent);color:white}
-.secondary{background:white;border-color:#d1d5db;color:var(--text)}
+.secondary,.file-button{background:white;border-color:#d1d5db;color:var(--text)}
 .danger,.delete-expense{background:white;border-color:#fecaca;color:var(--danger)}
+.file-button{display:inline-flex;align-items:center;justify-content:center;min-height:44px;cursor:pointer}
 .message{min-height:20px;font-size:13px;margin:10px 0 0;color:var(--success)}
+.helper{font-size:13px;line-height:1.5;color:var(--muted);margin-bottom:14px}
 .category-list,.expense-list{display:flex;flex-direction:column;gap:10px}
 .category-row,.expense-row{
   display:grid;gap:8px;padding:12px 0;border-bottom:1px solid var(--border)
@@ -100,11 +108,69 @@ h2{font-size:19px;margin-bottom:14px}
 .budget-fields{
   display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px
 }
+.check-row{display:flex;align-items:flex-start;gap:10px;margin:2px 0 14px;font-size:13px;color:#374151}
+.check-row input{width:18px;height:18px;margin:1px 0 0}
 .empty{color:var(--muted);font-size:14px;padding:8px 0}
 .footer-note p{color:var(--muted);margin:8px 0 0;font-size:13px;line-height:1.5}
+.data-actions{justify-content:flex-start;flex-wrap:wrap}
+.trend-chart{
+  display:flex;
+  align-items:flex-end;
+  gap:10px;
+  min-height:170px;
+  padding:14px 2px 6px;
+  overflow-x:auto;
+}
+.trend-col{
+  min-width:58px;
+  flex:1 0 58px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:7px;
+}
+.trend-value{font-size:11px;color:var(--muted);white-space:nowrap}
+.trend-track{
+  height:110px;
+  width:28px;
+  background:#eef0f3;
+  border-radius:8px;
+  display:flex;
+  align-items:flex-end;
+  overflow:hidden;
+}
+.trend-fill{
+  width:100%;
+  min-height:2px;
+  background:#64748b;
+  border-radius:8px 8px 0 0;
+}
+.trend-label{font-size:11px;color:var(--muted);white-space:nowrap}
+.trend-table{margin-top:12px}
+.trend-row{
+  display:grid;
+  grid-template-columns:1.3fr 1fr 1fr 1fr;
+  gap:8px;
+  align-items:center;
+  padding:10px 0;
+  border-top:1px solid var(--border);
+  font-size:13px;
+}
+.trend-row.header{
+  color:var(--muted);
+  font-size:11px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+}
+.trend-row .right{text-align:right}
+.good{color:var(--success);font-weight:700}
+.bad{color:var(--danger);font-weight:700}
 @media(max-width:520px){
   .summary-grid{grid-template-columns:1fr 1fr}
   .form-grid,.budget-fields{grid-template-columns:1fr}
   .full{grid-column:auto}
-  .topbar{align-items:flex-start}
+  .topbar{align-items:flex-start;flex-direction:column}
+  .month-control{width:100%}
+  .trend-row{grid-template-columns:1.1fr .9fr .9fr .9fr;font-size:12px}
 }

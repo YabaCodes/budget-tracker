@@ -19,7 +19,10 @@
         <p class="eyebrow">Personal finance</p>
         <h1>Budget Tracker</h1>
       </div>
-      <button id="resetMonthBtn" class="secondary">Reset month</button>
+      <div class="month-control">
+        <label for="monthSelect">View month</label>
+        <select id="monthSelect" aria-label="Select month"></select>
+      </div>
     </header>
 
     <section class="summary-grid">
@@ -28,7 +31,7 @@
         <strong id="monthlyBudget">NT$0</strong>
       </article>
       <article class="card">
-        <span>Spent this month</span>
+        <span>Spent</span>
         <strong id="monthlySpent">NT$0</strong>
       </article>
       <article class="card">
@@ -88,7 +91,7 @@
     <section class="card">
       <div class="section-head">
         <div>
-          <p class="eyebrow">This month</p>
+          <p class="eyebrow" id="budgetMonthLabel">Selected month</p>
           <h2>Category budgets</h2>
         </div>
         <button id="editBudgetsBtn" class="secondary">Edit budgets</button>
@@ -98,10 +101,17 @@
 
     <section class="card" id="budgetEditor" hidden>
       <div class="section-head">
-        <h2>Edit monthly budgets</h2>
+        <div>
+          <p class="eyebrow">Budget settings</p>
+          <h2 id="budgetEditorTitle">Edit monthly budgets</h2>
+        </div>
         <button id="closeBudgetsBtn" class="secondary">Close</button>
       </div>
       <div id="budgetFields" class="budget-fields"></div>
+      <label class="check-row">
+        <input type="checkbox" id="futureDefaultCheck" checked />
+        <span>Use these amounts as the default for future months</span>
+      </label>
       <button id="saveBudgetsBtn" class="primary">Save budgets</button>
     </section>
 
@@ -109,16 +119,46 @@
       <div class="section-head">
         <div>
           <p class="eyebrow">History</p>
-          <h2>Recent expenses</h2>
+          <h2 id="historyTitle">Expenses</h2>
         </div>
-        <button id="clearExpensesBtn" class="danger">Clear expenses</button>
+        <button id="clearSelectedMonthBtn" class="danger">Clear selected month</button>
       </div>
       <div id="expenseList" class="expense-list"></div>
     </section>
 
+    <section class="card">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Month by month</p>
+          <h2>Spending trend</h2>
+        </div>
+      </div>
+      <div id="trendChart" class="trend-chart" aria-label="Monthly spending trend"></div>
+      <div id="trendTable" class="trend-table"></div>
+    </section>
+
+    <section class="card">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Backup</p>
+          <h2>Protect your records</h2>
+        </div>
+      </div>
+      <p class="helper">
+        Your records stay on this device unless you export them. Use a backup file to preserve history or move data between your iPhone and iPad.
+      </p>
+      <div class="data-actions">
+        <button id="exportBackupBtn" class="secondary">Export backup</button>
+        <button id="exportCsvBtn" class="secondary">Export CSV</button>
+        <label class="secondary file-button" for="importBackupInput">Import backup</label>
+        <input id="importBackupInput" type="file" accept="application/json,.json" hidden />
+      </div>
+      <p id="backupMessage" class="message" aria-live="polite"></p>
+    </section>
+
     <section class="card footer-note">
-      <strong>How it works</strong>
-      <p>Every expense is saved on this device. The app totals spending by category and subtracts it from your monthly budget automatically.</p>
+      <strong>Records do not reset automatically.</strong>
+      <p>When a new month starts, the dashboard switches to the new month while prior transactions remain stored and can be selected from the month menu above.</p>
     </section>
   </main>
 
