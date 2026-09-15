@@ -13,155 +13,86 @@
   <title>Budget Tracker</title>
 </head>
 <body>
-  <main class="container">
-    <header class="topbar">
-      <div>
-        <p class="eyebrow">Personal finance</p>
-        <h1>Budget Tracker</h1>
-      </div>
-      <div class="month-control">
-        <label for="monthSelect">View month</label>
-        <select id="monthSelect" aria-label="Select month"></select>
-      </div>
+  <main class="app-shell">
+    <header class="app-header">
+      <div><p class="eyebrow">Personal finance</p><h1>Budget Tracker</h1></div>
+      <div class="month-control"><label for="monthSelect">View month</label><select id="monthSelect"></select></div>
     </header>
 
-    <section class="summary-grid">
-      <article class="card emphasis">
-        <span>Monthly budget</span>
-        <strong id="monthlyBudget">NT$0</strong>
-      </article>
-      <article class="card">
-        <span>Spent</span>
-        <strong id="monthlySpent">NT$0</strong>
-      </article>
-      <article class="card">
-        <span>Remaining</span>
-        <strong id="monthlyRemaining">NT$0</strong>
-      </article>
-      <article class="card">
-        <span>Cash reserve</span>
-        <strong id="cashReserve">NT$76,000</strong>
-      </article>
+    <nav class="tabs" aria-label="Budget Tracker sections">
+      <button class="tab-btn active" data-tab="budget" type="button" aria-selected="true">Budget</button>
+      <button class="tab-btn" data-tab="insights" type="button" aria-selected="false">Insights</button>
+      <button class="tab-btn" data-tab="history" type="button" aria-selected="false">History</button>
+    </nav>
+
+    <section id="tab-budget" class="tab-panel">
+      <section class="hero-grid">
+        <article class="card reserve-card">
+          <div class="card-head compact">
+            <div><span class="card-label">Cash reserve</span><strong id="cashReserve">NT$••••••</strong></div>
+            <button id="privacyBtn" class="icon-btn" type="button" aria-label="Show private balances">👁</button>
+          </div>
+          <div class="progress"><div id="goalBar" class="progress-fill"></div></div>
+          <div class="reserve-meta"><span id="goalPercent">•••%</span><span id="goalRemaining">NT$•••••• remaining</span></div>
+          <button id="toggleCashEditorBtn" class="text-btn" type="button">Update reserve</button>
+          <div id="cashEditor" class="inline-editor" hidden>
+            <label for="cashInput">Current cash reserve</label>
+            <div class="inline-input"><input id="cashInput" type="number" min="0" step="1" inputmode="numeric" /><button id="saveCashBtn" class="primary" type="button">Save</button></div>
+          </div>
+        </article>
+
+        <article class="card">
+          <span class="card-label">Remaining this month</span><strong id="monthlyRemaining">NT$0</strong>
+          <div class="metric-row"><span><b id="monthlySpent">NT$0</b> spent</span><span><b id="monthlyBudget">NT$0</b> budget</span></div>
+          <div class="progress"><div id="monthBudgetBar" class="progress-fill"></div></div>
+          <p id="paceMessage" class="helper no-margin"></p>
+        </article>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><div><p class="eyebrow">Daily entry</p><h2>Quick add expense</h2></div><button id="moreDetailsBtn" class="secondary" type="button">More details</button></div>
+        <form id="quickExpenseForm" class="quick-form"><div class="amount-wrap"><span>NT$</span><input id="quickAmount" type="number" min="1" step="1" inputmode="decimal" placeholder="180" required /></div><button class="primary quick-add-btn" type="submit">Add</button></form>
+        <div id="quickCategories" class="chip-row"></div><p id="quickMessage" class="message" aria-live="polite"></p>
+        <form id="detailExpenseForm" class="detail-form" hidden>
+          <label>Amount (NT$)<input id="detailAmount" type="number" min="1" step="1" inputmode="decimal" required /></label>
+          <label>Category<select id="detailCategory" required></select></label>
+          <label>Date<input id="detailDate" type="date" required /></label>
+          <label class="span-2">Note (optional)<input id="detailNote" type="text" maxlength="100" placeholder="Lunch, Uber, groceries..." /></label>
+          <button class="primary span-2" type="submit">Add detailed expense</button>
+        </form>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><div><p id="categoryMonthLabel" class="eyebrow">Selected month</p><h2>Category budgets</h2></div><button id="editBudgetsBtn" class="secondary" type="button">Edit budgets</button></div>
+        <div id="categoryList" class="category-list"></div>
+      </section>
+
+      <section id="budgetEditor" class="card editor-card" hidden>
+        <div class="card-head"><div><p class="eyebrow">Budget settings</p><h2 id="budgetEditorTitle">Edit budgets</h2></div><button id="closeBudgetsBtn" class="secondary" type="button">Close</button></div>
+        <div id="budgetFields" class="budget-fields"></div>
+        <fieldset class="scope-box"><legend>Apply changes to</legend><label><input type="radio" name="budgetScope" value="month" checked /> This selected month only</label><label><input type="radio" name="budgetScope" value="future" /> This month + future months</label></fieldset>
+        <button id="saveBudgetsBtn" class="primary full-width" type="button">Save budgets</button><p id="budgetSaveMessage" class="message" aria-live="polite"></p>
+      </section>
     </section>
 
-    <section class="card goal-card">
-      <div class="goal-row">
-        <div>
-          <span>Cash reserve goal</span>
-          <strong>NT$300,000</strong>
-        </div>
-        <div class="goal-number" id="goalPercent">0%</div>
-      </div>
-      <div class="progress">
-        <div id="goalBar" class="progress-bar"></div>
-      </div>
-      <div class="cash-edit">
-        <label for="cashInput">Current cash reserve</label>
-        <div class="inline-input">
-          <input id="cashInput" type="number" min="0" step="1" inputmode="numeric" />
-          <button id="saveCashBtn">Save</button>
-        </div>
-      </div>
+    <section id="tab-insights" class="tab-panel" hidden>
+      <section class="insight-grid">
+        <article class="card score-card"><span class="card-label">Budget score</span><strong id="budgetScore">—</strong><p id="scoreSummary" class="helper"></p><button id="scoreInfoBtn" class="text-btn" type="button">How score works</button><div id="scoreInfo" class="info-box" hidden><p><b>40 pts</b> overall budget control</p><p><b>40 pts</b> category adherence</p><p><b>20 pts</b> spending pace for the current month</p></div></article>
+        <article class="card"><span class="card-label">Spending pace</span><strong id="pacePercent">—</strong><p id="paceInsight" class="helper"></p></article>
+      </section>
+      <section class="card"><div class="card-head"><div><p class="eyebrow">Month by month</p><h2>Spending trend</h2></div></div><div id="monthlyTrendChart" class="bar-chart"></div></section>
+      <section class="card"><div class="card-head"><div><p class="eyebrow">Category analysis</p><h2>Category trend</h2></div><select id="trendCategory" class="compact-select"></select></div><div id="categoryTrendChart" class="line-chart-wrap"></div><div class="mini-stats"><div><span>Average</span><strong id="trendAverage">NT$0</strong></div><div><span>Current budget</span><strong id="trendBudget">NT$0</strong></div><div><span>Direction</span><strong id="trendDirection">—</strong></div></div></section>
+      <section class="card"><div class="card-head"><div><p class="eyebrow">Selected month</p><h2>Budget usage</h2></div></div><div id="usageRanking" class="usage-ranking"></div></section>
     </section>
 
-    <section class="card">
-      <h2>Add expense</h2>
-      <form id="expenseForm" class="form-grid">
-        <label>
-          Amount (NT$)
-          <input id="amount" type="number" min="1" step="1" inputmode="decimal" required placeholder="e.g. 180" />
-        </label>
-        <label>
-          Category
-          <select id="category" required></select>
-        </label>
-        <label>
-          Date
-          <input id="date" type="date" required />
-        </label>
-        <label class="full">
-          Note (optional)
-          <input id="note" type="text" maxlength="80" placeholder="Lunch, Uber, groceries..." />
-        </label>
-        <button class="primary full" type="submit">+ Add expense</button>
-      </form>
-      <p id="formMessage" class="message" aria-live="polite"></p>
+    <section id="tab-history" class="tab-panel" hidden>
+      <section class="card"><div class="card-head"><div><p class="eyebrow">Month by month</p><h2>Budget history</h2></div></div><div class="table-scroll"><table class="history-table"><thead><tr><th>Month</th><th>Budget</th><th>Spent</th><th>Variance</th><th>Score</th></tr></thead><tbody id="historyTableBody"></tbody></table></div></section>
+      <section class="card"><div class="card-head"><div><p class="eyebrow">Transactions</p><h2 id="historyTitle">Expenses</h2></div><button id="clearSelectedMonthBtn" class="danger" type="button">Clear month</button></div><div id="expenseList" class="expense-list"></div></section>
+      <section class="card"><div class="card-head"><div><p class="eyebrow">Data safety</p><h2>Backup & export</h2></div></div><p class="helper">Your data is stored locally on this device. Export a backup periodically, especially before major updates.</p><div class="data-actions"><button id="exportBackupBtn" class="secondary" type="button">Export backup</button><button id="exportCsvBtn" class="secondary" type="button">Export CSV</button><label class="secondary file-button" for="importBackupInput">Import backup</label><input id="importBackupInput" type="file" accept="application/json,.json" hidden /></div><p id="backupMessage" class="message" aria-live="polite"></p></section>
     </section>
 
-    <section class="card">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow" id="budgetMonthLabel">Selected month</p>
-          <h2>Category budgets</h2>
-        </div>
-        <button id="editBudgetsBtn" class="secondary">Edit budgets</button>
-      </div>
-      <div id="categoryList" class="category-list"></div>
-    </section>
-
-    <section class="card" id="budgetEditor" hidden>
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">Budget settings</p>
-          <h2 id="budgetEditorTitle">Edit monthly budgets</h2>
-        </div>
-        <button id="closeBudgetsBtn" class="secondary">Close</button>
-      </div>
-      <div id="budgetFields" class="budget-fields"></div>
-      <label class="check-row">
-        <input type="checkbox" id="futureDefaultCheck" checked />
-        <span>Use these amounts as the default for future months</span>
-      </label>
-      <button id="saveBudgetsBtn" class="primary">Save budgets</button>
-    </section>
-
-    <section class="card">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">History</p>
-          <h2 id="historyTitle">Expenses</h2>
-        </div>
-        <button id="clearSelectedMonthBtn" class="danger">Clear selected month</button>
-      </div>
-      <div id="expenseList" class="expense-list"></div>
-    </section>
-
-    <section class="card">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">Month by month</p>
-          <h2>Spending trend</h2>
-        </div>
-      </div>
-      <div id="trendChart" class="trend-chart" aria-label="Monthly spending trend"></div>
-      <div id="trendTable" class="trend-table"></div>
-    </section>
-
-    <section class="card">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">Backup</p>
-          <h2>Protect your records</h2>
-        </div>
-      </div>
-      <p class="helper">
-        Your records stay on this device unless you export them. Use a backup file to preserve history or move data between your iPhone and iPad.
-      </p>
-      <div class="data-actions">
-        <button id="exportBackupBtn" class="secondary">Export backup</button>
-        <button id="exportCsvBtn" class="secondary">Export CSV</button>
-        <label class="secondary file-button" for="importBackupInput">Import backup</label>
-        <input id="importBackupInput" type="file" accept="application/json,.json" hidden />
-      </div>
-      <p id="backupMessage" class="message" aria-live="polite"></p>
-    </section>
-
-    <section class="card footer-note">
-      <strong>Records do not reset automatically.</strong>
-      <p>When a new month starts, the dashboard switches to the new month while prior transactions remain stored and can be selected from the month menu above.</p>
-    </section>
+    <div id="undoToast" class="undo-toast" role="status" aria-live="polite" hidden><span id="undoText">Expense added.</span><button id="undoBtn" type="button">Undo</button></div>
   </main>
-
   <script src="app.js"></script>
 </body>
 </html>
