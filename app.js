@@ -171,38 +171,91 @@ const activeSpecials=()=>specialBudgets.filter(s=>s.status==="active");
 const archivedSpecials=()=>specialBudgets.filter(s=>s.status==="archived");
 const specialById=id=>specialBudgets.find(s=>s.id===id);
 
-// v7.2: JPY convenience conversion. Uses the active Japan/Japanese-yen travel budget rate
-// when available, otherwise the most recent JPY travel budget rate.
-function getJpyFxRate(){
-  const selected=specialById(selectedSpecialId);
-  if(selected?.type==="travel"&&selected.localCurrency==="JPY"&&Number(selected.fxRate)>0)return Number(selected.fxRate);
-  const active=activeSpecials().find(s=>s.type==="travel"&&s.localCurrency==="JPY"&&Number(s.fxRate)>0);
-  if(active)return Number(active.fxRate);
-  const recent=[...specialBudgets].filter(s=>s.type==="travel"&&s.localCurrency==="JPY"&&Number(s.fxRate)>0).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0))[0];
-  return recent?Number(recent.fxRate):null;
+// v7.3: each Special Budget can choose its own local display currency.
+// TWD remains the accounting/base currency everywhere.
+function specialCurrencyCode(s){
+  const code=String(s?.localCurrency||"TWD").toUpperCase();
+  return CURRENCIES.includes(code)?code:"TWD";
 }
-function jpyText(twd,{masked=false}={}){
-  const rate=getJpyFxRate();
-  if(!rate)return "";
-  if(masked)return "≈ ¥••••••";
-  const yen=Math.round((Number(twd)||0)/rate);
-  return `≈ ¥${yen.toLocaleString("en-US")}`;
+function specialFxRate(s){
+  const code=specialCurrencyCode(s);
+  if(code==="TWD")return 1;
+  const rate=Number(s?.fxRate);
+  return Number.isFinite(rate)&&rate>0?rate:null;
 }
-function jpyHtml(twd){
-  const text=jpyText(twd);
-  return text?`<div class="jpy-conversion">${text}</div>`:"";
+function localCurrencyText(twd,s,{masked=false}={}){
+  if(!s)return "";
+  const code=specialCurrencyCode(s),rate=specialFxRate(s);
+  if(code==="TWD"||!rate)return "";
+  if(masked)return `≈ ${code} ••••••`;
+  const local=(Number(twd)||0)/rate;
+  const zeroDecimal=["JPY","KRW"].includes(code);
+  try{
+    const formatted=new Intl.NumberFormat("en-US",{
+      style:"currency",
+      currency:code,
+      currencyDisplay:"narrowSymbol",
+      minimumFractionDigits:zeroDecimal?0:2,
+      maximumFractionDigits:zeroDecimal?0:2
+    }).format(local);
+    return `≈ ${formatted}`;
+  }catch{
+    return `≈ ${code} ${local.toLocaleString("en-US",{maximumFractionDigits:zeroDecimal?0:2})}`;
+  }
 }
-function setJpyBelow(id,twd,{masked=false}={}){
+function localCurrencyHtml(twd,s){
+  const text=localCurrencyText(twd,s);
+  return text?`<div class="local-conversion">${text}</div>`:"";
+}
+function setLocalBelow(id,twd,s,{masked=false}={}){
   const el=$(id);if(!el)return;
   let sub=el.nextElementSibling;
-  if(!sub||!sub.classList.contains("jpy-conversion")){sub=document.createElement("div");sub.className="jpy-conversion";el.insertAdjacentElement("afterend",sub)}
-  const text=jpyText(twd,{masked});
-  sub.textContent=text;sub.hidden=!text;
+  if(!sub||!sub.classList.contains("local-conversion")){
+    sub=document.createElement("div");
+    sub.className="local-conversion";
+    el.insertAdjacentElement("afterend",sub)
+  }
+  const text=localCurrencyText(twd,s,{masked});
+  sub.textContent=text;
+  sub.hidden=!text;
 }
-function attachEditorJpy(input){
-  const sub=document.createElement("div");sub.className="jpy-conversion editor-jpy";
-  const update=()=>{const text=jpyText(Number(input.value)||0);sub.textContent=text;sub.hidden=!text};
-  input.insertAdjacentElement("afterend",sub);input.addEventListener("input",update);update();
+function attachEditorLocal(input,s){
+  const sub=document.createElement("div");
+  sub.className="local-conversion editor-local";
+  const update=()=>{
+    const text=localCurrencyText(Number(input.value)||0,s);
+    sub.textContent=text;
+    sub.hidden=!text
+  };
+  input.insertAdjacentElement("afterend",sub);
+  input.addEventListener("input",update);
+  update()
+}
+function renderSpecialCurrencySettings(s){
+  const sel=$("specialDisplayCurrency");
+  fillCurrencySelect(sel,specialCurrencyCode(s));
+  const code=specialCurrencyCode(s);
+  const input=$("specialDisplayFxRate");
+  input.value=code==="TWD"?"1":(Number(s.fxRate)||"");
+  input.disabled=code==="TWD";
+  $("specialDisplayFxHelp").textContent=code==="TWD"?"TWD is the main currency.":`1 ${code} = NT$${Number(input.value||0).toLocaleString("en-US",{maximumFractionDigits:6})}`;
+  updateSpecialCurrencyPreview(s)
+}
+function updateSpecialCurrencyPreview(s){
+  if(!s)return;
+  const code=$("specialDisplayCurrency").value||specialCurrencyCode(s);
+  const rate=code==="TWD"?1:Number($("specialDisplayFxRate").value);
+  if(code==="TWD"){
+    $("specialCurrencyPreview").textContent="NT$1,000 · no secondary conversion";
+    $("specialDisplayFxHelp").textContent="TWD is the main currency.";
+    $("specialDisplayFxRate").disabled=true;
+    return
+  }
+  $("specialDisplayFxRate").disabled=false;
+  $("specialDisplayFxHelp").textContent=`1 ${code} = NT$${Number.isFinite(rate)&&rate>0?rate.toLocaleString("en-US",{maximumFractionDigits:6}):"?"}`;
+  const temp={localCurrency:code,fxRate:rate};
+  const text=localCurrencyText(1000,temp);
+  $("specialCurrencyPreview").textContent=text?`NT$1,000 ${text}`:"Enter a valid FX rate to preview the conversion."
 }
 
 function availableMonths(){
@@ -247,19 +300,16 @@ function renderMonthSelect(){
 function renderReserve(){
   const pct=Math.min(100,reserveTwd/GOAL*100),left=Math.max(0,GOAL-reserveTwd);
   $("cashReserve").textContent=privacyHidden?"NT$••••••":money(reserveTwd);
-  setJpyBelow("cashReserve",reserveTwd,{masked:privacyHidden});
   $("goalPercent").textContent=privacyHidden?"•••%":pct.toFixed(1)+"%";
   $("goalRemaining").textContent=privacyHidden?"NT$•••••• to goal":money(left)+" to goal";
   $("goalBar").style.width=pct+"%";$("privacyBtn").textContent=privacyHidden?"👁":"🙈";$("reserveInput").value=Math.round(reserveTwd);
   const act=activeSpecials(),alloc=act.reduce((x,s)=>x+Number(s.allocatedTwd||0),0),spent=act.reduce((x,s)=>x+specialSpent(s),0),remain=act.reduce((x,s)=>x+Math.max(0,specialRemaining(s)),0);
   $("activeSpecialAllocated").textContent=money(alloc);$("activeSpecialSpent").textContent=money(spent);$("activeSpecialRemaining").textContent=money(remain);
-  setJpyBelow("activeSpecialAllocated",alloc);setJpyBelow("activeSpecialSpent",spent);setJpyBelow("activeSpecialRemaining",remain)
 }
 function renderRegularSummary(){
   const spent=totalRegularSpent(selectedMonth),budget=totalRegularBudget(selectedMonth),rem=budget-spent,u=budget?spent/budget:0;
   $("monthSummaryTitle").textContent=`${monthLabel(selectedMonth)} regular budget`;
   $("monthlyBudget").textContent=money(budget);$("monthlySpent").textContent=money(spent);$("monthlyRemaining").textContent=money(Math.max(0,rem));
-  setJpyBelow("monthlyBudget",budget);setJpyBelow("monthlySpent",spent);setJpyBelow("monthlyRemaining",Math.max(0,rem));
   $("monthBudgetBar").style.width=Math.min(100,u*100)+"%";
   if(selectedMonth===currentMonthKey()){const e=elapsedRatio(selectedMonth);$("paceMessage").textContent=u>e+.05?`Regular spending is ahead of pace: ${(u*100).toFixed(0)}% used with ${(e*100).toFixed(0)}% of the month elapsed.`:`Regular spending pace looks controlled: ${(u*100).toFixed(0)}% used with ${(e*100).toFixed(0)}% of the month elapsed.`}
   else $("paceMessage").textContent=rem>=0?`${money(rem)} finished unspent.`:`${money(Math.abs(rem))} over budget.`
@@ -275,17 +325,17 @@ function renderDetailCategory(){
 }
 function renderRegularCategories(){
   const b=ensureMonthBudget(selectedMonth),sm=regularSpentByCategory(selectedMonth),wrap=$("categoryList");$("categoryMonthLabel").textContent=monthLabel(selectedMonth);wrap.innerHTML="";
-  Object.entries(b).forEach(([n,bv])=>{const bud=Number(bv)||0,used=sm[n]||0,rem=bud-used,pct=bud?Math.min(100,used/bud*100):(used?100:0),st=status(used,bud,selectedMonth),row=document.createElement("div");row.className="category-row";row.innerHTML=`<div class="category-top"><div><div class="category-name">${esc(n)}</div><div class="category-meta">${money(used)} spent · ${money(Math.max(0,rem))} remaining</div><span class="status ${st}">${statusLabel(st)}</span></div><div class="budget-amount-block"><strong>${money(bud)}</strong>${jpyHtml(bud)}</div></div><div class="progress"><div class="progress-fill" style="width:${pct}%"></div></div>`;wrap.appendChild(row)})
+  Object.entries(b).forEach(([n,bv])=>{const bud=Number(bv)||0,used=sm[n]||0,rem=bud-used,pct=bud?Math.min(100,used/bud*100):(used?100:0),st=status(used,bud,selectedMonth),row=document.createElement("div");row.className="category-row";row.innerHTML=`<div class="category-top"><div><div class="category-name">${esc(n)}</div><div class="category-meta">${money(used)} spent · ${money(Math.max(0,rem))} remaining</div><span class="status ${st}">${statusLabel(st)}</span></div><div class="budget-amount-block"><strong>${money(bud)}</strong></div></div><div class="progress"><div class="progress-fill" style="width:${pct}%"></div></div>`;wrap.appendChild(row)})
 }
 function renderBudgetEditor(){
   const wrap=$("budgetFields");wrap.innerHTML="";$("budgetEditorTitle").textContent=`Edit ${monthLabel(selectedMonth)} budgets`;
-  Object.entries(ensureMonthBudget(selectedMonth)).forEach(([n,v])=>{const l=document.createElement("label");l.textContent=n;const i=document.createElement("input");i.type="number";i.min="0";i.step="1";i.value=Math.round(Number(v)||0);i.dataset.category=n;l.appendChild(i);wrap.appendChild(l);attachEditorJpy(i)})
+  Object.entries(ensureMonthBudget(selectedMonth)).forEach(([n,v])=>{const l=document.createElement("label");l.textContent=n;const i=document.createElement("input");i.type="number";i.min="0";i.step="1";i.value=Math.round(Number(v)||0);i.dataset.category=n;l.appendChild(i);wrap.appendChild(l)})
 }
 
 function renderSpecialSummary(){
   const wrap=$("specialBudgetSummaryList"),act=activeSpecials();wrap.innerHTML="";
   if(!act.length){wrap.innerHTML='<div class="empty">No active Special Budgets.</div>';return}
-  act.forEach(s=>{const spent=specialSpent(s),rem=specialRemaining(s),row=document.createElement("div");row.className="special-row";row.innerHTML=`<div><div class="special-name">${TYPE_META[s.type]?.icon||"📦"} ${esc(s.name)}</div><div class="special-meta">${TYPE_META[s.type]?.label||"Special"} · ${money(spent)} spent</div></div><div class="special-right"><strong>${money(Math.max(0,rem))}</strong>${jpyHtml(Math.max(0,rem))}<div class="special-meta">remaining</div></div>`;row.addEventListener("click",()=>{selectedSpecialId=s.id;renderSpecialPanel();renderTabs("special")});wrap.appendChild(row)})
+  act.forEach(s=>{const spent=specialSpent(s),rem=specialRemaining(s),row=document.createElement("div");row.className="special-row";row.innerHTML=`<div><div class="special-name">${TYPE_META[s.type]?.icon||"📦"} ${esc(s.name)}</div><div class="special-meta">${TYPE_META[s.type]?.label||"Special"} · ${money(spent)} spent</div></div><div class="special-right"><strong>${money(Math.max(0,rem))}</strong>${localCurrencyHtml(Math.max(0,rem),s)}<div class="special-meta">remaining</div></div>`;row.addEventListener("click",()=>{selectedSpecialId=s.id;renderSpecialPanel();renderTabs("special")});wrap.appendChild(row)})
 }
 function renderSpecialPanel(){
   const s=specialById(selectedSpecialId)||activeSpecials()[0];if(!s)return;selectedSpecialId=s.id;
@@ -294,9 +344,9 @@ function renderSpecialPanel(){
   const spent=specialSpent(s),rem=specialRemaining(s),pct=s.allocatedTwd?Math.min(100,spent/s.allocatedTwd*100):0,meta=TYPE_META[s.type]||TYPE_META.other;
   $("specialTypeLabel").textContent=meta.label;$("specialTitle").textContent=s.name;$("specialDates").textContent=`${s.startDate} → ${s.endDate}`;
   $("specialRemaining").textContent=money(Math.max(0,rem));$("specialAllocated").textContent=money(s.allocatedTwd);$("specialSpent").textContent=money(spent);
-  setJpyBelow("specialRemaining",Math.max(0,rem));setJpyBelow("specialAllocated",s.allocatedTwd);setJpyBelow("specialSpent",spent);
+  setLocalBelow("specialRemaining",Math.max(0,rem),s);setLocalBelow("specialAllocated",s.allocatedTwd,s);setLocalBelow("specialSpent",spent,s);
   $("specialProgressBar").style.width=pct+"%";$("finishReturnAmount").value=Math.max(0,Math.floor(rem));
-  renderSpecialCategorySelect(s);renderSpecialCategories(s);renderSpecialWallets(s);renderSpecialTransactions(s);
+  renderSpecialCurrencySettings(s);renderSpecialCategorySelect(s);renderSpecialCategories(s);renderSpecialWallets(s);renderSpecialTransactions(s);
   const travel=s.type==="travel";$("travelWalletSection").hidden=!travel;$("specialExpenseCurrencyWrap").hidden=!travel;$("specialExpenseFxWrap").hidden=!travel;$("specialExpenseWalletWrap").hidden=!travel;
   if(travel){
     const cur=s.localCurrency||"JPY";fillCurrencySelect($("specialExpenseCurrency"),cur);$("specialExpenseFx").value=Number(s.fxRate)||1;
@@ -309,12 +359,12 @@ function renderSpecialCategorySelect(s){
 function renderSpecialCategories(s){
   const spentMap={};(s.expenses||[]).forEach(e=>spentMap[e.category]=(spentMap[e.category]||0)+Number(e.amountTwd||0));
   const wrap=$("specialCategoryList");wrap.innerHTML="";
-  Object.entries(s.categories||{}).forEach(([n,bv])=>{const bud=Number(bv)||0,used=spentMap[n]||0,rem=bud-used,pct=bud?Math.min(100,used/bud*100):(used?100:0),row=document.createElement("div");row.className="category-row";row.innerHTML=`<div class="category-top"><div><div class="category-name">${esc(n)}</div><div class="category-meta">${money(used)} spent${bud?` · ${money(Math.max(0,rem))} category balance`:""}</div></div><div class="budget-amount-block"><strong>${money(bud)}</strong>${jpyHtml(bud)}</div></div><div class="progress"><div class="progress-fill" style="width:${pct}%"></div></div>`;wrap.appendChild(row)});
+  Object.entries(s.categories||{}).forEach(([n,bv])=>{const bud=Number(bv)||0,used=spentMap[n]||0,rem=bud-used,pct=bud?Math.min(100,used/bud*100):(used?100:0),row=document.createElement("div");row.className="category-row";row.innerHTML=`<div class="category-top"><div><div class="category-name">${esc(n)}</div><div class="category-meta">${money(used)} spent${bud?` · ${money(Math.max(0,rem))} category balance`:""}</div></div><div class="budget-amount-block"><strong>${money(bud)}</strong>${localCurrencyHtml(bud,s)}</div></div><div class="progress"><div class="progress-fill" style="width:${pct}%"></div></div>`;wrap.appendChild(row)});
   renderSpecialCategoryEditor(s)
 }
 function renderSpecialCategoryEditor(s){
   const wrap=$("specialCategoryFields");wrap.innerHTML="";
-  Object.entries(s.categories||{}).forEach(([n,v])=>{const l=document.createElement("label");l.textContent=n;const i=document.createElement("input");i.type="number";i.min="0";i.step="1";i.value=Math.round(Number(v)||0);i.dataset.category=n;l.appendChild(i);wrap.appendChild(l);attachEditorJpy(i)})
+  Object.entries(s.categories||{}).forEach(([n,v])=>{const l=document.createElement("label");l.textContent=n;const i=document.createElement("input");i.type="number";i.min="0";i.step="1";i.value=Math.round(Number(v)||0);i.dataset.category=n;l.appendChild(i);wrap.appendChild(l);attachEditorLocal(i,s)})
 }
 function fillCurrencySelect(sel,preferred){
   sel.innerHTML="";CURRENCIES.forEach(c=>{const o=document.createElement("option");o.value=c;o.textContent=c;sel.appendChild(o)});if(CURRENCIES.includes(preferred))sel.value=preferred
@@ -359,7 +409,7 @@ function renderInsights(){
   $("pacePercent").textContent=(u*100).toFixed(0)+"%";$("paceInsight").textContent=selectedMonth===currentMonthKey()?`${(e*100).toFixed(0)}% of the month has passed.`:(u<=1?"Finished within regular budget.":"Finished over regular budget.");
   const wrap=$("specialInsightsList");wrap.innerHTML="";const all=[...activeSpecials(),...archivedSpecials()];
   if(!all.length)wrap.innerHTML='<div class="empty">No Special Budget history yet.</div>';
-  all.forEach(s=>{const r=document.createElement("div");r.className="special-row";r.innerHTML=`<div><div class="special-name">${TYPE_META[s.type]?.icon||"📦"} ${esc(s.name)}</div><div class="special-meta">${s.status==="active"?"Active":"Archived"} · allocated ${money(s.allocatedTwd)} ${jpyText(s.allocatedTwd)?`· ${jpyText(s.allocatedTwd)}`:""}</div></div><div class="special-right"><strong>${money(specialSpent(s))}</strong>${jpyHtml(specialSpent(s))}<div class="special-meta">spent</div></div>`;wrap.appendChild(r)})
+  all.forEach(s=>{const r=document.createElement("div");r.className="special-row";r.innerHTML=`<div><div class="special-name">${TYPE_META[s.type]?.icon||"📦"} ${esc(s.name)}</div><div class="special-meta">${s.status==="active"?"Active":"Archived"} · allocated ${money(s.allocatedTwd)} ${localCurrencyText(s.allocatedTwd,s)?`· ${localCurrencyText(s.allocatedTwd,s)}`:""}</div></div><div class="special-right"><strong>${money(specialSpent(s))}</strong>${localCurrencyHtml(specialSpent(s),s)}<div class="special-meta">spent</div></div>`;wrap.appendChild(r)})
 }
 function renderMonthlyTrend(){
   const months=trendMonths(6),data=months.map(m=>({m,spent:totalRegularSpent(m),budget:totalRegularBudget(m)})),max=Math.max(1,...data.map(d=>Math.max(d.spent,d.budget))),wrap=$("monthlyTrendChart");wrap.innerHTML="";
@@ -382,7 +432,7 @@ function renderHistory(){
   if(!rows.length)wrap.innerHTML='<div class="empty">No regular expenses for this month.</div>';
   rows.forEach(e=>{const r=document.createElement("div");r.className="expense-row";r.innerHTML=`<div class="expense-top"><div><div class="expense-name">${esc(e.category)}</div><div class="expense-meta">${esc(e.date)}${e.note?" · "+esc(e.note):""}</div></div><strong>${money(e.amount)}</strong></div>`;const b=document.createElement("button");b.type="button";b.className="delete-btn";b.textContent="Delete";b.addEventListener("click",()=>deleteRegularExpense(e.id));r.appendChild(b);wrap.appendChild(r)});
   const ar=$("archivedSpecialList");ar.innerHTML="";if(!archivedSpecials().length)ar.innerHTML='<div class="empty">No archived Special Budgets yet.</div>';
-  archivedSpecials().forEach(s=>{const r=document.createElement("div");r.className="special-row";r.innerHTML=`<div><div class="special-name">${TYPE_META[s.type]?.icon||"📦"} ${esc(s.name)}</div><div class="special-meta">Allocated ${money(s.allocatedTwd)} · returned ${money(s.returnedTwd||0)}</div></div><div class="special-right"><strong>${money(specialSpent(s))}</strong><div class="special-meta">spent</div></div>`;ar.appendChild(r)})
+  archivedSpecials().forEach(s=>{const r=document.createElement("div");r.className="special-row";r.innerHTML=`<div><div class="special-name">${TYPE_META[s.type]?.icon||"📦"} ${esc(s.name)}</div><div class="special-meta">Allocated ${money(s.allocatedTwd)} · returned ${money(s.returnedTwd||0)}</div></div><div class="special-right"><strong>${money(specialSpent(s))}</strong>${localCurrencyHtml(specialSpent(s),s)}<div class="special-meta">spent</div></div>`;ar.appendChild(r)})
 }
 
 function renderAll(){
@@ -457,6 +507,30 @@ $("specialBudgetForm").addEventListener("submit",e=>{
   specialBudgets.push(s);selectedSpecialId=s.id;$("specialBudgetForm").reset();$("specialStart").value=todayISO();$("specialEnd").value=todayISO();$("specialCreator").hidden=true;persist();renderAll();renderSpecialPanel();renderTabs("special")
 });
 
+$("specialDisplayCurrency").addEventListener("change",()=>{
+  const s=specialById(selectedSpecialId);if(!s)return;
+  const code=$("specialDisplayCurrency").value;
+  if(code==="TWD")$("specialDisplayFxRate").value="1";
+  else if(code===specialCurrencyCode(s)&&Number(s.fxRate)>0)$("specialDisplayFxRate").value=Number(s.fxRate);
+  updateSpecialCurrencyPreview(s)
+});
+$("specialDisplayFxRate").addEventListener("input",()=>{
+  const s=specialById(selectedSpecialId);if(s)updateSpecialCurrencyPreview(s)
+});
+$("saveSpecialCurrencyBtn").addEventListener("click",()=>{
+  const s=specialById(selectedSpecialId);if(!s)return;
+  const code=$("specialDisplayCurrency").value;
+  const rate=code==="TWD"?1:Number($("specialDisplayFxRate").value);
+  if(code!=="TWD"&&(!Number.isFinite(rate)||rate<=0)){
+    $("specialCurrencyMessage").textContent="Enter a valid FX rate.";
+    return
+  }
+  s.localCurrency=code;
+  s.fxRate=rate;
+  $("specialCurrencyMessage").textContent=code==="TWD"?"Secondary currency hidden for this Special Budget.":`Saved ${code}: 1 ${code} = NT$${rate.toLocaleString("en-US",{maximumFractionDigits:6})}.`;
+  persist();renderAll();renderSpecialPanel()
+});
+
 $("increaseSpecialBtn").addEventListener("click",()=>{$("increaseSpecialForm").hidden=!$("increaseSpecialForm").hidden});
 $("saveIncreaseSpecialBtn").addEventListener("click",()=>{const s=specialById(selectedSpecialId),v=Number($("increaseSpecialAmount").value);if(!s||!Number.isFinite(v)||v<=0||v>reserveTwd){$("specialActionMessage").textContent=v>reserveTwd?"Not enough available reserve.":"Enter a valid amount.";return}reserveTwd-=v;s.allocatedTwd=Number(s.allocatedTwd||0)+v;$("increaseSpecialAmount").value="";$("increaseSpecialForm").hidden=true;persist();renderAll();renderSpecialPanel()});
 $("finishSpecialBtn").addEventListener("click",()=>{const s=specialById(selectedSpecialId);if(!s)return;$("finishReturnAmount").value=Math.max(0,Math.floor(specialRemaining(s)));$("finishSpecialForm").hidden=!$("finishSpecialForm").hidden});
@@ -502,7 +576,7 @@ $("undoBtn").addEventListener("click",()=>{if(!lastUndo)return;if(lastUndo.kind=
 $("trendCategory").addEventListener("change",renderCategoryTrend);
 $("clearSelectedMonthBtn").addEventListener("click",()=>{if(!confirm(`Delete ALL regular expenses for ${monthLabel(selectedMonth)}? Special Budget activity will not be touched.`))return;regularExpenses=regularExpenses.filter(e=>monthKey(e.date)!==selectedMonth||isMigratedV6TripExpense(e));persist();renderAll()});
 
-$("exportBackupBtn").addEventListener("click",()=>{const data={version:7,exportedAt:new Date().toISOString(),reserveTwd,templateBudgets,monthBudgets,regularExpenses,specialBudgets,settings};downloadText(`budget-tracker-backup-${todayISO()}.json`,JSON.stringify(data,null,2),"application/json");$("backupMessage").textContent="Backup exported."});
+$("exportBackupBtn").addEventListener("click",()=>{const data={version:7.3,exportedAt:new Date().toISOString(),reserveTwd,templateBudgets,monthBudgets,regularExpenses,specialBudgets,settings};downloadText(`budget-tracker-backup-${todayISO()}.json`,JSON.stringify(data,null,2),"application/json");$("backupMessage").textContent="Backup exported."});
 $("exportCsvBtn").addEventListener("click",()=>{
   const header=["Scope","Special_Budget","Date","Category","Original_Amount","Currency","FX_to_TWD","Amount_TWD","Note"],rows=[];
   regularExpenses.filter(e=>!isMigratedV6TripExpense(e)).forEach(e=>rows.push(["Regular","",e.date,e.category,e.amount,"TWD",1,e.amount,e.note||""]));

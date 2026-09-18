@@ -68,8 +68,8 @@ h1,h2,h3,p{margin-top:0}h1{font-size:28px;margin-bottom:0}h2{font-size:19px;marg
 #budgetEditor:not([hidden]),#specialCategoryEditor:not([hidden]){border-color:#cbd5e1}
 
 
-/* v7.2 Japanese-yen conversion helpers */
-.jpy-conversion{
+/* v7.3 per-Special-Budget local currency reference */
+.local-conversion{
   margin-top:2px;
   color:var(--muted);
   font-size:11px;
@@ -82,6 +82,48 @@ h1,h2,h3,p{margin-top:0}h1{font-size:28px;margin-bottom:0}h2{font-size:19px;marg
   text-align:right;
 }
 .budget-amount-block strong{display:block}
-.editor-jpy{font-weight:500;margin-top:4px}
-.summary-grid .jpy-conversion{margin-top:3px}
-.card-head .jpy-conversion{font-size:11px}
+.editor-local{font-weight:500;margin-top:4px}
+.currency-settings-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+}
+.currency-settings-grid label{
+  font-size:12px;
+  font-weight:750;
+  color:#374151;
+}
+.currency-settings-grid input,
+.currency-settings-grid select{
+  width:100%;
+  min-height:46px;
+  margin-top:6px;
+  padding:10px 12px;
+  border:1px solid #d1d5db;
+  border-radius:12px;
+  background:#fff;
+  font-size:16px;
+  color:var(--text);
+}
+.currency-settings-grid input:disabled{
+  background:#f3f4f6;
+  color:var(--muted);
+}
+.currency-settings-grid small{
+  display:block;
+  color:var(--muted);
+  font-size:11px;
+  margin-top:4px;
+}
+.currency-settings-footer{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-top:12px;
+}
+.currency-settings-footer .helper{margin:0}
+@media(max-width:580px){
+  .currency-settings-grid{grid-template-columns:1fr}
+  .currency-settings-footer{align-items:flex-start;flex-direction:column}
+}
