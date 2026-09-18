@@ -66,3 +66,22 @@ h1,h2,h3,p{margin-top:0}h1{font-size:28px;margin-bottom:0}h2{font-size:19px;marg
 [hidden]{display:none!important}
 #budgetEditor,#specialCategoryEditor{scroll-margin-top:16px}
 #budgetEditor:not([hidden]),#specialCategoryEditor:not([hidden]){border-color:#cbd5e1}
+
+
+/* v7.2 Japanese-yen conversion helpers */
+.jpy-conversion{
+  margin-top:2px;
+  color:var(--muted);
+  font-size:11px;
+  font-weight:600;
+  line-height:1.25;
+  white-space:nowrap;
+}
+.budget-amount-block{
+  flex:0 0 auto;
+  text-align:right;
+}
+.budget-amount-block strong{display:block}
+.editor-jpy{font-weight:500;margin-top:4px}
+.summary-grid .jpy-conversion{margin-top:3px}
+.card-head .jpy-conversion{font-size:11px}
