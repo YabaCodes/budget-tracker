@@ -61,3 +61,8 @@ h1,h2,h3,p{margin-top:0}h1{font-size:28px;margin-bottom:0}h2{font-size:19px;marg
 @media(max-width:580px){
   .app-header{align-items:flex-start;flex-direction:column}.month-control{width:100%}.hero-grid,.insight-grid,.detail-form,.budget-fields,.two-col{grid-template-columns:1fr}.span-2{grid-column:auto}.summary-grid{grid-template-columns:1fr 1fr}.type-grid{grid-template-columns:1fr 1fr}.mini-stats{grid-template-columns:repeat(3,1fr)}
 }
+
+/* v7.1 editor UX fixes */
+[hidden]{display:none!important}
+#budgetEditor,#specialCategoryEditor{scroll-margin-top:16px}
+#budgetEditor:not([hidden]),#specialCategoryEditor:not([hidden]){border-color:#cbd5e1}

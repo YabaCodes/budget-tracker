@@ -251,6 +251,8 @@ function renderSpecialSummary(){
 }
 function renderSpecialPanel(){
   const s=specialById(selectedSpecialId)||activeSpecials()[0];if(!s)return;selectedSpecialId=s.id;
+  $("specialCategoryEditor").hidden=true;
+  $("showSpecialCategoryEditorBtn").textContent="Edit";
   const spent=specialSpent(s),rem=specialRemaining(s),pct=s.allocatedTwd?Math.min(100,spent/s.allocatedTwd*100):0,meta=TYPE_META[s.type]||TYPE_META.other;
   $("specialTypeLabel").textContent=meta.label;$("specialTitle").textContent=s.name;$("specialDates").textContent=`${s.startDate} → ${s.endDate}`;
   $("specialRemaining").textContent=money(Math.max(0,rem));$("specialAllocated").textContent=money(s.allocatedTwd);$("specialSpent").textContent=money(spent);$("specialProgressBar").style.width=pct+"%";$("finishReturnAmount").value=Math.max(0,Math.floor(rem));
@@ -389,10 +391,19 @@ $("quickExpenseForm").addEventListener("submit",e=>{e.preventDefault();const x=a
 $("moreDetailsBtn").addEventListener("click",()=>{const f=$("detailExpenseForm");f.hidden=!f.hidden;$("moreDetailsBtn").textContent=f.hidden?"More details":"Hide details";if(!f.hidden)$("detailDate").value=todayISO()});
 $("detailExpenseForm").addEventListener("submit",e=>{e.preventDefault();const x=addRegularExpense($("detailAmount").value,$("detailCategory").value,$("detailDate").value,$("detailNote").value.trim());if(x){$("detailExpenseForm").reset();$("detailDate").value=todayISO();renderAll()}});
 
-$("editBudgetsBtn").addEventListener("click",()=>{$("budgetEditor").hidden=false;renderBudgetEditor()});
-$("closeBudgetsBtn").addEventListener("click",()=>{$("budgetEditor").hidden=true});
+$("editBudgetsBtn").addEventListener("click",()=>{
+  const editor=$("budgetEditor");
+  renderBudgetEditor();
+  editor.hidden=false;
+  $("editBudgetsBtn").textContent="Editing…";
+  requestAnimationFrame(()=>editor.scrollIntoView({behavior:"smooth",block:"start"}));
+});
+$("closeBudgetsBtn").addEventListener("click",()=>{
+  $("budgetEditor").hidden=true;
+  $("editBudgetsBtn").textContent="Edit budgets";
+});
 $("stageCategoryBtn").addEventListener("click",()=>{const n=$("newCategoryName").value.trim(),v=Number($("newCategoryBudget").value);if(!n||!Number.isFinite(v)||v<0){$("budgetSaveMessage").textContent="Enter a name and valid budget.";return}const l=document.createElement("label");l.textContent=n;const i=document.createElement("input");i.type="number";i.min="0";i.step="1";i.value=Math.round(v);i.dataset.category=n;l.appendChild(i);$("budgetFields").appendChild(l);$("newCategoryName").value="";$("newCategoryBudget").value="";$("budgetSaveMessage").textContent="Category staged. Tap Save budgets."});
-$("saveBudgetsBtn").addEventListener("click",()=>{const u={};$("budgetFields").querySelectorAll("input[data-category]").forEach(i=>{const v=Number(i.value);if(Number.isFinite(v)&&v>=0)u[i.dataset.category]=Math.round(v)});const sc=document.querySelector('input[name="budgetScope"]:checked')?.value||"month";monthBudgets[selectedMonth]=clone(u);if(sc==="future"){templateBudgets=clone(u);Object.keys(monthBudgets).forEach(m=>{if(m>selectedMonth)monthBudgets[m]=clone(u)})}persist();$("budgetSaveMessage").textContent="Budget saved.";renderAll();setTimeout(()=>{$("budgetEditor").hidden=true;$("budgetSaveMessage").textContent=""},700)});
+$("saveBudgetsBtn").addEventListener("click",()=>{const u={};$("budgetFields").querySelectorAll("input[data-category]").forEach(i=>{const v=Number(i.value);if(Number.isFinite(v)&&v>=0)u[i.dataset.category]=Math.round(v)});const sc=document.querySelector('input[name="budgetScope"]:checked')?.value||"month";monthBudgets[selectedMonth]=clone(u);if(sc==="future"){templateBudgets=clone(u);Object.keys(monthBudgets).forEach(m=>{if(m>selectedMonth)monthBudgets[m]=clone(u)})}persist();$("budgetSaveMessage").textContent="Budget saved.";renderAll();setTimeout(()=>{$("budgetEditor").hidden=true;$("editBudgetsBtn").textContent="Edit budgets";$("budgetSaveMessage").textContent=""},700)});
 
 $("openSpecialCreatorBtn").addEventListener("click",()=>{$("specialCreator").hidden=false});
 $("closeSpecialCreatorBtn").addEventListener("click",()=>{$("specialCreator").hidden=true});
@@ -419,9 +430,22 @@ $("specialExpenseForm").addEventListener("submit",e=>{
   const over=-specialRemaining(s);$("specialExpenseMessage").textContent=over>0?`Expense saved. This Special Budget is ${money(over)} over budget.`:"Expense saved.";
   $("specialExpenseForm").reset();$("specialExpenseDate").value=todayISO();renderAll();renderSpecialPanel()
 });
-$("showSpecialCategoryEditorBtn").addEventListener("click",()=>{$("specialCategoryEditor").hidden=!$("specialCategoryEditor").hidden});
+$("showSpecialCategoryEditorBtn").addEventListener("click",()=>{
+  const s=specialById(selectedSpecialId);
+  const editor=$("specialCategoryEditor");
+  if(!s)return;
+  if(editor.hidden){
+    renderSpecialCategoryEditor(s);
+    editor.hidden=false;
+    $("showSpecialCategoryEditorBtn").textContent="Close editor";
+    requestAnimationFrame(()=>editor.scrollIntoView({behavior:"smooth",block:"center"}));
+  }else{
+    editor.hidden=true;
+    $("showSpecialCategoryEditorBtn").textContent="Edit";
+  }
+});
 $("addSpecialCategoryBtn").addEventListener("click",()=>{const s=specialById(selectedSpecialId),n=$("specialNewCategoryName").value.trim(),v=Number($("specialNewCategoryBudget").value);if(!s||!n||!Number.isFinite(v)||v<0)return;s.categories[n]=Math.round(v);$("specialNewCategoryName").value="";$("specialNewCategoryBudget").value="";renderSpecialCategories(s)});
-$("saveSpecialCategoriesBtn").addEventListener("click",()=>{const s=specialById(selectedSpecialId);if(!s)return;const u={};$("specialCategoryFields").querySelectorAll("input[data-category]").forEach(i=>{const v=Number(i.value);if(Number.isFinite(v)&&v>=0)u[i.dataset.category]=Math.round(v)});s.categories=u;persist();$("specialCategoryEditor").hidden=true;renderSpecialPanel()});
+$("saveSpecialCategoriesBtn").addEventListener("click",()=>{const s=specialById(selectedSpecialId);if(!s)return;const u={};$("specialCategoryFields").querySelectorAll("input[data-category]").forEach(i=>{const v=Number(i.value);if(Number.isFinite(v)&&v>=0)u[i.dataset.category]=Math.round(v)});s.categories=u;persist();$("specialCategoryEditor").hidden=true;$("showSpecialCategoryEditorBtn").textContent="Edit";renderSpecialPanel()});
 
 $("specialWalletForm").addEventListener("submit",e=>{e.preventDefault();const s=specialById(selectedSpecialId),name=$("specialWalletName").value.trim(),bal=Number($("specialWalletBalance").value),cur=$("specialWalletCurrency").value;if(!s||s.type!=="travel"||!name||!Number.isFinite(bal)||bal<0)return;s.wallets.push({id:uid("wallet"),name,currency:cur,balance:bal});$("specialWalletForm").reset();persist();renderSpecialPanel()});
 $("specialTransferForm").addEventListener("submit",e=>{
@@ -450,6 +474,7 @@ $("importBackupInput").addEventListener("change",async e=>{
     reserveTwd=Math.max(0,Number(d.reserveTwd??d.cashReserve??reserveTwd)||0);templateBudgets=d.templateBudgets||clone(DEFAULT_BUDGETS);monthBudgets=d.monthBudgets||{};regularExpenses=normalizeRegular(d.regularExpenses||d.expenses||[]);specialBudgets=Array.isArray(d.specialBudgets)?d.specialBudgets:[];settings=d.settings||settings;selectedMonth=currentMonthKey();selectedSpecialId="";persist();renderAll();renderTabs("budget");$("backupMessage").textContent="Backup imported successfully."
   }catch{$("backupMessage").textContent="Could not import this backup file."}finally{e.target.value=""}
 });
+
 
 if("serviceWorker"in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
 
