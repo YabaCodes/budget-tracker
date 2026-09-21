@@ -54,7 +54,7 @@ let templateBudgets=loadJSON(STORAGE.templateBudgets,legacyBudgets);
 let monthBudgets=loadJSON(STORAGE.monthBudgets,{});
 let regularExpenses=normalizeRegular(loadJSON(STORAGE.regularExpenses,[]));
 let specialBudgets=loadJSON(STORAGE.specialBudgets,[]);
-let settings=loadJSON(STORAGE.settings,{migrationNoticeDismissed:false});
+let settings=loadJSON(STORAGE.settings,{migrationNoticeDismissed:false,theme:"earthy-sunset"});
 let reserveTwd=0;
 let selectedMonth=currentMonthKey();
 let selectedQuickCategory="Food & groceries";
@@ -62,6 +62,11 @@ let selectedSpecialId="";
 let selectedSpecialType="travel";
 let privacyHidden=true;
 let lastUndo=null,undoTimer=null;
+
+function applyTheme(){
+  if(!settings.theme) settings.theme="earthy-sunset";
+  document.documentElement.dataset.theme=settings.theme;
+}
 
 function normalizeRegular(list){
   if(!Array.isArray(list))return[];
@@ -286,7 +291,7 @@ function renderTabs(active){
 function renderSpecialTabs(){
   const mount=$("specialTabMount");mount.innerHTML="";
   activeSpecials().forEach(s=>{
-    const b=document.createElement("button");b.type="button";b.className="tab-btn special-tab-btn";b.dataset.tab="special";b.dataset.specialId=s.id;
+    const b=document.createElement("button");b.type="button";b.className="tab-btn special-tab-btn";b.dataset.tab="special";b.dataset.specialId=s.id;b.dataset.specialType=s.type;
     b.textContent=`${TYPE_META[s.type]?.icon||"📦"} ${s.name}`;
     b.addEventListener("click",()=>{selectedSpecialId=s.id;renderSpecialPanel();renderTabs("special")});
     mount.appendChild(b)
@@ -335,10 +340,11 @@ function renderBudgetEditor(){
 function renderSpecialSummary(){
   const wrap=$("specialBudgetSummaryList"),act=activeSpecials();wrap.innerHTML="";
   if(!act.length){wrap.innerHTML='<div class="empty">No active Special Budgets.</div>';return}
-  act.forEach(s=>{const spent=specialSpent(s),rem=specialRemaining(s),row=document.createElement("div");row.className="special-row";row.innerHTML=`<div><div class="special-name">${TYPE_META[s.type]?.icon||"📦"} ${esc(s.name)}</div><div class="special-meta">${TYPE_META[s.type]?.label||"Special"} · ${money(spent)} spent</div></div><div class="special-right"><strong>${money(Math.max(0,rem))}</strong>${localCurrencyHtml(Math.max(0,rem),s)}<div class="special-meta">remaining</div></div>`;row.addEventListener("click",()=>{selectedSpecialId=s.id;renderSpecialPanel();renderTabs("special")});wrap.appendChild(row)})
+  act.forEach(s=>{const spent=specialSpent(s),rem=specialRemaining(s),row=document.createElement("div");row.className="special-row";row.dataset.specialType=s.type;row.innerHTML=`<div><div class="special-name">${TYPE_META[s.type]?.icon||"📦"} ${esc(s.name)}</div><div class="special-meta">${TYPE_META[s.type]?.label||"Special"} · ${money(spent)} spent</div></div><div class="special-right"><strong>${money(Math.max(0,rem))}</strong>${localCurrencyHtml(Math.max(0,rem),s)}<div class="special-meta">remaining</div></div>`;row.addEventListener("click",()=>{selectedSpecialId=s.id;renderSpecialPanel();renderTabs("special")});wrap.appendChild(row)})
 }
 function renderSpecialPanel(){
   const s=specialById(selectedSpecialId)||activeSpecials()[0];if(!s)return;selectedSpecialId=s.id;
+  $("tab-special").dataset.specialType=s.type;
   $("specialCategoryEditor").hidden=true;
   $("showSpecialCategoryEditorBtn").textContent="Edit";
   const spent=specialSpent(s),rem=specialRemaining(s),pct=s.allocatedTwd?Math.min(100,spent/s.allocatedTwd*100):0,meta=TYPE_META[s.type]||TYPE_META.other;
@@ -576,7 +582,7 @@ $("undoBtn").addEventListener("click",()=>{if(!lastUndo)return;if(lastUndo.kind=
 $("trendCategory").addEventListener("change",renderCategoryTrend);
 $("clearSelectedMonthBtn").addEventListener("click",()=>{if(!confirm(`Delete ALL regular expenses for ${monthLabel(selectedMonth)}? Special Budget activity will not be touched.`))return;regularExpenses=regularExpenses.filter(e=>monthKey(e.date)!==selectedMonth||isMigratedV6TripExpense(e));persist();renderAll()});
 
-$("exportBackupBtn").addEventListener("click",()=>{const data={version:7.3,exportedAt:new Date().toISOString(),reserveTwd,templateBudgets,monthBudgets,regularExpenses,specialBudgets,settings};downloadText(`budget-tracker-backup-${todayISO()}.json`,JSON.stringify(data,null,2),"application/json");$("backupMessage").textContent="Backup exported."});
+$("exportBackupBtn").addEventListener("click",()=>{const data={version:7.4,exportedAt:new Date().toISOString(),reserveTwd,templateBudgets,monthBudgets,regularExpenses,specialBudgets,settings};downloadText(`budget-tracker-backup-${todayISO()}.json`,JSON.stringify(data,null,2),"application/json");$("backupMessage").textContent="Backup exported."});
 $("exportCsvBtn").addEventListener("click",()=>{
   const header=["Scope","Special_Budget","Date","Category","Original_Amount","Currency","FX_to_TWD","Amount_TWD","Note"],rows=[];
   regularExpenses.filter(e=>!isMigratedV6TripExpense(e)).forEach(e=>rows.push(["Regular","",e.date,e.category,e.amount,"TWD",1,e.amount,e.note||""]));
@@ -585,7 +591,7 @@ $("exportCsvBtn").addEventListener("click",()=>{
 });
 $("importBackupInput").addEventListener("change",async e=>{
   const file=e.target.files?.[0];if(!file)return;try{const d=JSON.parse(await file.text());if(!d||!Array.isArray(d.regularExpenses)&&!Array.isArray(d.expenses))throw new Error();if(!confirm("Import this backup and replace data on this device?")){e.target.value="";return}
-    reserveTwd=Math.max(0,Number(d.reserveTwd??d.cashReserve??reserveTwd)||0);templateBudgets=d.templateBudgets||clone(DEFAULT_BUDGETS);monthBudgets=d.monthBudgets||{};regularExpenses=normalizeRegular(d.regularExpenses||d.expenses||[]);specialBudgets=Array.isArray(d.specialBudgets)?d.specialBudgets:[];settings=d.settings||settings;selectedMonth=currentMonthKey();selectedSpecialId="";persist();renderAll();renderTabs("budget");$("backupMessage").textContent="Backup imported successfully."
+    reserveTwd=Math.max(0,Number(d.reserveTwd??d.cashReserve??reserveTwd)||0);templateBudgets=d.templateBudgets||clone(DEFAULT_BUDGETS);monthBudgets=d.monthBudgets||{};regularExpenses=normalizeRegular(d.regularExpenses||d.expenses||[]);specialBudgets=Array.isArray(d.specialBudgets)?d.specialBudgets:[];settings={...settings,...(d.settings||{})};if(!settings.theme)settings.theme="earthy-sunset";applyTheme();selectedMonth=currentMonthKey();selectedSpecialId="";persist();renderAll();renderTabs("budget");$("backupMessage").textContent="Backup imported successfully."
   }catch{$("backupMessage").textContent="Could not import this backup file."}finally{e.target.value=""}
 });
 
@@ -593,5 +599,5 @@ $("importBackupInput").addEventListener("change",async e=>{
 if("serviceWorker"in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
 
 $("detailDate").value=todayISO();$("specialStart").value=todayISO();$("specialEnd").value=todayISO();$("specialExpenseDate").value=todayISO();$("specialTransferDate").value=todayISO();$("travelCreatorFields").hidden=false;
-initReserve();migrateV6Trips();ensureMonthBudget(currentMonthKey());persist();renderTabs("budget");renderAll();
+initReserve();migrateV6Trips();ensureMonthBudget(currentMonthKey());applyTheme();persist();renderTabs("budget");renderAll();
 })();

@@ -127,3 +127,202 @@ h1,h2,h3,p{margin-top:0}h1{font-size:28px;margin-bottom:0}h2{font-size:19px;marg
   .currency-settings-grid{grid-template-columns:1fr}
   .currency-settings-footer{align-items:flex-start;flex-direction:column}
 }
+
+
+/* v7.4 Earthy Sunset theme
+   Inspired by warm mineral greens + restrained sunset plum/pink accents.
+   Theme name is stored in settings and therefore travels with JSON backups. */
+:root[data-theme="earthy-sunset"]{
+  --bg:#F8F6EE;
+  --card:#FFFEFB;
+  --text:#2E3A2F;
+  --muted:#6F746B;
+  --border:#E4DDD2;
+  --accent:#4D3A4D;
+  --accent-soft:#EADADA;
+  --success:#6B7F5B;
+  --warn:#C96F4F;
+  --danger:#B34D45;
+  --series:#6B7F5B;
+  --field-border:#D9C9B2;
+  --tab-shell:#EFE9DF;
+  --soft-sage:#E7ECE1;
+  --soft-plum:#EADADA;
+  --soft-terracotta:#F3DED5;
+  --soft-magenta:#F1DFEC;
+}
+
+:root[data-theme="earthy-sunset"] html,
+:root[data-theme="earthy-sunset"] body{
+  background:var(--bg);
+}
+
+:root[data-theme="earthy-sunset"] button:focus-visible,
+:root[data-theme="earthy-sunset"] input:focus-visible,
+:root[data-theme="earthy-sunset"] select:focus-visible{
+  outline-color:rgba(77,58,77,.24);
+}
+
+:root[data-theme="earthy-sunset"] .tabs{
+  background:var(--tab-shell);
+}
+
+:root[data-theme="earthy-sunset"] .tab-btn.active{
+  background:#FFFDF9;
+  color:var(--accent);
+  box-shadow:0 1px 3px rgba(77,58,77,.10);
+}
+
+:root[data-theme="earthy-sunset"] .primary{
+  background:var(--accent);
+  color:#fff;
+}
+
+:root[data-theme="earthy-sunset"] .secondary,
+:root[data-theme="earthy-sunset"] .file-button,
+:root[data-theme="earthy-sunset"] .icon-btn{
+  background:#FFFDF9;
+  border-color:var(--field-border);
+}
+
+:root[data-theme="earthy-sunset"] .card{
+  background:var(--card);
+  border-color:var(--border);
+  box-shadow:0 1px 0 rgba(77,58,77,.025);
+}
+
+:root[data-theme="earthy-sunset"] .notice-card{
+  background:#FFF9F2;
+  border-color:#DEC9B8;
+}
+
+:root[data-theme="earthy-sunset"] .month-control select,
+:root[data-theme="earthy-sunset"] .compact-select,
+:root[data-theme="earthy-sunset"] .detail-form input,
+:root[data-theme="earthy-sunset"] .detail-form select,
+:root[data-theme="earthy-sunset"] .budget-fields input,
+:root[data-theme="earthy-sunset"] .two-col input,
+:root[data-theme="earthy-sunset"] .two-col select,
+:root[data-theme="earthy-sunset"] .inline-editor input,
+:root[data-theme="earthy-sunset"] .currency-settings-grid input,
+:root[data-theme="earthy-sunset"] .currency-settings-grid select,
+:root[data-theme="earthy-sunset"] .amount-wrap{
+  border-color:var(--field-border);
+  background:#FFFDF9;
+}
+
+:root[data-theme="earthy-sunset"] .chip.active,
+:root[data-theme="earthy-sunset"] .type-btn.active{
+  background:var(--accent-soft);
+  border-color:#CDBAC5;
+  color:var(--accent);
+}
+
+:root[data-theme="earthy-sunset"] .progress{
+  background:#EEE9E2;
+}
+
+:root[data-theme="earthy-sunset"] .progress-fill{
+  background:var(--series);
+}
+
+:root[data-theme="earthy-sunset"] .status.good{
+  background:var(--soft-sage);
+  color:#4F6845;
+}
+:root[data-theme="earthy-sunset"] .status.watch{
+  background:var(--soft-terracotta);
+  color:#9A543C;
+}
+:root[data-theme="earthy-sunset"] .status.over{
+  background:#F6E0DE;
+  color:var(--danger);
+}
+
+:root[data-theme="earthy-sunset"] .positive{
+  color:#5A714F;
+}
+:root[data-theme="earthy-sunset"] .negative{
+  color:var(--danger);
+}
+
+:root[data-theme="earthy-sunset"] .bar-fill,
+:root[data-theme="earthy-sunset"] .chart-line{
+  background:var(--accent);
+  stroke:var(--accent);
+}
+:root[data-theme="earthy-sunset"] .chart-dot{
+  stroke:var(--accent);
+}
+:root[data-theme="earthy-sunset"] .chart-budget{
+  stroke:#B7AA99;
+}
+:root[data-theme="earthy-sunset"] .chart-grid{
+  stroke:#E8E0D5;
+}
+
+/* Special Budget accent identity */
+#tab-special[data-special-type="travel"]{
+  --special-accent:#BE5CA9;
+  --special-soft:#F1DFEC;
+}
+#tab-special[data-special-type="purchase"]{
+  --special-accent:#6B7F5B;
+  --special-soft:#E7ECE1;
+}
+#tab-special[data-special-type="event"]{
+  --special-accent:#C96F4F;
+  --special-soft:#F3DED5;
+}
+#tab-special[data-special-type="other"]{
+  --special-accent:#4D3A4D;
+  --special-soft:#EADADA;
+}
+
+#tab-special[data-special-type] .eyebrow{
+  color:var(--special-accent);
+}
+#tab-special[data-special-type] .progress-fill{
+  background:var(--special-accent);
+}
+#tab-special[data-special-type] .currency-card{
+  border-top:3px solid var(--special-accent);
+}
+#tab-special[data-special-type] .local-conversion{
+  color:var(--special-accent);
+  opacity:.82;
+}
+
+:root[data-theme="earthy-sunset"] .special-tab-btn[data-special-type="travel"].active{
+  background:#F1DFEC;
+  color:#8D3F7B;
+}
+:root[data-theme="earthy-sunset"] .special-tab-btn[data-special-type="purchase"].active{
+  background:#E7ECE1;
+  color:#526447;
+}
+:root[data-theme="earthy-sunset"] .special-tab-btn[data-special-type="event"].active{
+  background:#F3DED5;
+  color:#A55137;
+}
+:root[data-theme="earthy-sunset"] .special-tab-btn[data-special-type="other"].active{
+  background:#EADADA;
+  color:#4D3A4D;
+}
+
+:root[data-theme="earthy-sunset"] .special-row[data-special-type="travel"]{
+  border-left:3px solid #BE5CA9;
+  padding-left:10px;
+}
+:root[data-theme="earthy-sunset"] .special-row[data-special-type="purchase"]{
+  border-left:3px solid #6B7F5B;
+  padding-left:10px;
+}
+:root[data-theme="earthy-sunset"] .special-row[data-special-type="event"]{
+  border-left:3px solid #C96F4F;
+  padding-left:10px;
+}
+:root[data-theme="earthy-sunset"] .special-row[data-special-type="other"]{
+  border-left:3px solid #4D3A4D;
+  padding-left:10px;
+}
