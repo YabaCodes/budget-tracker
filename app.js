@@ -284,6 +284,52 @@ function status(used,budget,mk){
 }
 const statusLabel=s=>s==="over"?"Over budget":s==="watch"?"Watch":"On track";
 
+function specialElapsedRatio(s){
+  if(!s?.startDate||!s?.endDate)return 1;
+  const start=new Date(`${s.startDate}T00:00:00`);
+  const end=new Date(`${s.endDate}T23:59:59`);
+  const now=new Date();
+  if(Number.isNaN(start.getTime())||Number.isNaN(end.getTime())||end<=start)return 1;
+  if(now<=start)return 0;
+  if(now>=end)return 1;
+  return Math.min(1,Math.max(0,(now-start)/(end-start)));
+}
+function specialSpendStatus(used,budget,s){
+  used=Number(used)||0;budget=Number(budget)||0;
+  if(budget<=0)return used>0?"over":"good";
+  if(used>budget)return"over";
+  const usage=used/budget;
+  const elapsed=specialElapsedRatio(s);
+
+  // Watch if consumption is materially ahead of the Special Budget's timeline,
+  // or if most of the budget has already been used.
+  if(s?.status==="active" && (usage>elapsed+.08 || usage>=.85))return"watch";
+
+  // For a period that has ended, near-total use is still worth flagging,
+  // while staying within the allocation is not considered over budget.
+  if(elapsed>=1 && usage>=.90)return"watch";
+  return"good";
+}
+function specialStatusDetail(used,budget,s){
+  const st=specialSpendStatus(used,budget,s);
+  if(budget<=0){
+    return used>0?"Spending recorded without a category budget.":"No spending yet.";
+  }
+  const usage=used/budget;
+  const elapsed=specialElapsedRatio(s);
+  if(st==="over")return `${money(used-budget)} over budget`;
+  if(st==="watch"){
+    if(s?.status==="active" && elapsed<1 && usage>elapsed+.08){
+      return `${Math.round(usage*100)}% used · ${Math.round(elapsed*100)}% of period elapsed`;
+    }
+    return `${Math.round(usage*100)}% of budget used`;
+  }
+  if(s?.status==="active" && elapsed<1){
+    return `${Math.round(usage*100)}% used · ${Math.round(elapsed*100)}% of period elapsed`;
+  }
+  return `${Math.round(usage*100)}% of budget used`;
+}
+
 function renderTabs(active){
   document.querySelectorAll(".tab-btn").forEach(b=>b.classList.toggle("active",b.dataset.tab===active||(active==="special"&&b.dataset.specialId===selectedSpecialId)));
   document.querySelectorAll(".tab-panel").forEach(p=>p.hidden=p.id!==`tab-${active}`);
@@ -340,7 +386,7 @@ function renderBudgetEditor(){
 function renderSpecialSummary(){
   const wrap=$("specialBudgetSummaryList"),act=activeSpecials();wrap.innerHTML="";
   if(!act.length){wrap.innerHTML='<div class="empty">No active Special Budgets.</div>';return}
-  act.forEach(s=>{const spent=specialSpent(s),rem=specialRemaining(s),row=document.createElement("div");row.className="special-row";row.dataset.specialType=s.type;row.innerHTML=`<div><div class="special-name">${TYPE_META[s.type]?.icon||"📦"} ${esc(s.name)}</div><div class="special-meta">${TYPE_META[s.type]?.label||"Special"} · ${money(spent)} spent</div></div><div class="special-right"><strong>${money(Math.max(0,rem))}</strong>${localCurrencyHtml(Math.max(0,rem),s)}<div class="special-meta">remaining</div></div>`;row.addEventListener("click",()=>{selectedSpecialId=s.id;renderSpecialPanel();renderTabs("special")});wrap.appendChild(row)})
+  act.forEach(s=>{const spent=specialSpent(s),rem=specialRemaining(s),st=specialSpendStatus(spent,s.allocatedTwd,s),row=document.createElement("div");row.className="special-row";row.dataset.specialType=s.type;row.innerHTML=`<div><div class="special-name">${TYPE_META[s.type]?.icon||"📦"} ${esc(s.name)}</div><div class="special-meta">${TYPE_META[s.type]?.label||"Special"} · ${money(spent)} spent</div><span class="status ${st}">${statusLabel(st)}</span></div><div class="special-right"><strong>${money(Math.max(0,rem))}</strong>${localCurrencyHtml(Math.max(0,rem),s)}<div class="special-meta">remaining</div></div>`;row.addEventListener("click",()=>{selectedSpecialId=s.id;renderSpecialPanel();renderTabs("special")});wrap.appendChild(row)})
 }
 function renderSpecialPanel(){
   const s=specialById(selectedSpecialId)||activeSpecials()[0];if(!s)return;selectedSpecialId=s.id;
@@ -352,6 +398,10 @@ function renderSpecialPanel(){
   $("specialRemaining").textContent=money(Math.max(0,rem));$("specialAllocated").textContent=money(s.allocatedTwd);$("specialSpent").textContent=money(spent);
   setLocalBelow("specialRemaining",Math.max(0,rem),s);setLocalBelow("specialAllocated",s.allocatedTwd,s);setLocalBelow("specialSpent",spent,s);
   $("specialProgressBar").style.width=pct+"%";$("finishReturnAmount").value=Math.max(0,Math.floor(rem));
+  const overallStatus=specialSpendStatus(spent,s.allocatedTwd,s);
+  $("specialOverallStatus").className=`status ${overallStatus}`;
+  $("specialOverallStatus").textContent=statusLabel(overallStatus);
+  $("specialPaceText").textContent=specialStatusDetail(spent,s.allocatedTwd,s);
   renderSpecialCurrencySettings(s);renderSpecialCategorySelect(s);renderSpecialCategories(s);renderSpecialWallets(s);renderSpecialTransactions(s);
   const travel=s.type==="travel";$("travelWalletSection").hidden=!travel;$("specialExpenseCurrencyWrap").hidden=!travel;$("specialExpenseFxWrap").hidden=!travel;$("specialExpenseWalletWrap").hidden=!travel;
   if(travel){
@@ -365,7 +415,7 @@ function renderSpecialCategorySelect(s){
 function renderSpecialCategories(s){
   const spentMap={};(s.expenses||[]).forEach(e=>spentMap[e.category]=(spentMap[e.category]||0)+Number(e.amountTwd||0));
   const wrap=$("specialCategoryList");wrap.innerHTML="";
-  Object.entries(s.categories||{}).forEach(([n,bv])=>{const bud=Number(bv)||0,used=spentMap[n]||0,rem=bud-used,pct=bud?Math.min(100,used/bud*100):(used?100:0),row=document.createElement("div");row.className="category-row";row.innerHTML=`<div class="category-top"><div><div class="category-name">${esc(n)}</div><div class="category-meta">${money(used)} spent${bud?` · ${money(Math.max(0,rem))} category balance`:""}</div></div><div class="budget-amount-block"><strong>${money(bud)}</strong>${localCurrencyHtml(bud,s)}</div></div><div class="progress"><div class="progress-fill" style="width:${pct}%"></div></div>`;wrap.appendChild(row)});
+  Object.entries(s.categories||{}).forEach(([n,bv])=>{const bud=Number(bv)||0,used=spentMap[n]||0,rem=bud-used,pct=bud?Math.min(100,used/bud*100):(used?100:0),st=specialSpendStatus(used,bud,s),row=document.createElement("div");row.className="category-row";row.innerHTML=`<div class="category-top"><div><div class="category-name">${esc(n)}</div><div class="category-meta">${money(used)} spent${bud?` · ${money(Math.max(0,rem))} category balance`:""}</div><span class="status ${st}">${statusLabel(st)}</span><span class="category-status-detail">${esc(specialStatusDetail(used,bud,s))}</span></div><div class="budget-amount-block"><strong>${money(bud)}</strong>${localCurrencyHtml(bud,s)}</div></div><div class="progress"><div class="progress-fill" style="width:${pct}%"></div></div>`;wrap.appendChild(row)});
   renderSpecialCategoryEditor(s)
 }
 function renderSpecialCategoryEditor(s){
@@ -582,7 +632,7 @@ $("undoBtn").addEventListener("click",()=>{if(!lastUndo)return;if(lastUndo.kind=
 $("trendCategory").addEventListener("change",renderCategoryTrend);
 $("clearSelectedMonthBtn").addEventListener("click",()=>{if(!confirm(`Delete ALL regular expenses for ${monthLabel(selectedMonth)}? Special Budget activity will not be touched.`))return;regularExpenses=regularExpenses.filter(e=>monthKey(e.date)!==selectedMonth||isMigratedV6TripExpense(e));persist();renderAll()});
 
-$("exportBackupBtn").addEventListener("click",()=>{const data={version:7.4,exportedAt:new Date().toISOString(),reserveTwd,templateBudgets,monthBudgets,regularExpenses,specialBudgets,settings};downloadText(`budget-tracker-backup-${todayISO()}.json`,JSON.stringify(data,null,2),"application/json");$("backupMessage").textContent="Backup exported."});
+$("exportBackupBtn").addEventListener("click",()=>{const data={version:7.5,exportedAt:new Date().toISOString(),reserveTwd,templateBudgets,monthBudgets,regularExpenses,specialBudgets,settings};downloadText(`budget-tracker-backup-${todayISO()}.json`,JSON.stringify(data,null,2),"application/json");$("backupMessage").textContent="Backup exported."});
 $("exportCsvBtn").addEventListener("click",()=>{
   const header=["Scope","Special_Budget","Date","Category","Original_Amount","Currency","FX_to_TWD","Amount_TWD","Note"],rows=[];
   regularExpenses.filter(e=>!isMigratedV6TripExpense(e)).forEach(e=>rows.push(["Regular","",e.date,e.category,e.amount,"TWD",1,e.amount,e.note||""]));
