@@ -106,7 +106,7 @@
       <form id="quickExpenseForm" class="quick-form">
         <div class="amount-wrap">
           <span id="quickBaseCurrency">TWD</span>
-          <input id="quickAmount" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="180" required />
+          <input id="quickAmount" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00" required />
         </div>
         <button class="primary" type="submit">Add</button>
       </form>
@@ -124,7 +124,7 @@
           <input id="detailDate" type="date" required />
         </label>
         <label class="span-2">Note
-          <input id="detailNote" type="text" maxlength="120" placeholder="Lunch, Uber, groceries..." />
+          <input id="detailNote" type="text" maxlength="120" placeholder="Optional note" />
         </label>
         <button class="primary span-2" type="submit">Add expense</button>
       </form>
@@ -149,7 +149,8 @@
         </div>
         <button id="closeBudgetsBtn" class="secondary" type="button">Close</button>
       </div>
-      <div id="budgetFields" class="budget-fields"></div>
+      <p class="helper budget-editor-help">Use ↑/↓ to choose the order shown on the Budget tab. Remove hides a category after you save; existing transactions are never deleted.</p>
+      <div id="budgetFields" class="budget-fields budget-editor-list"></div>
       <div class="new-category-box">
         <strong>Add regular category</strong>
         <div class="two-col">
@@ -192,15 +193,15 @@
       </div>
 
       <div id="specialTypePicker" class="type-grid">
-        <button type="button" class="type-btn active" data-type="travel">✈️ <b>Travel / Vacation</b><span>Trips, FX, prepaid wallets</span></button>
-        <button type="button" class="type-btn" data-type="purchase">🛍️ <b>Large Purchase</b><span>MacBook, furniture, equipment</span></button>
-        <button type="button" class="type-btn" data-type="event">🎉 <b>Event</b><span>Birthday, celebration, wedding</span></button>
+        <button type="button" class="type-btn active" data-type="travel">✈️ <b>Travel / Vacation</b><span>Travel costs and local-currency spending</span></button>
+        <button type="button" class="type-btn" data-type="purchase">🛍️ <b>Large Purchase</b><span>One-time planned purchase</span></button>
+        <button type="button" class="type-btn" data-type="event">🎉 <b>Event</b><span>Planned event costs</span></button>
         <button type="button" class="type-btn" data-type="other">📦 <b>Other</b><span>Flexible one-time budget</span></button>
       </div>
 
       <form id="specialBudgetForm" class="detail-form">
         <label>Name
-          <input id="specialName" type="text" maxlength="50" placeholder="Japan 2026" required />
+          <input id="specialName" type="text" maxlength="50" placeholder="Budget name" required />
         </label>
         <label>Allocate from reserve (<span id="specialAllocationBaseCurrency">TWD</span>)
           <input id="specialAllocation" type="number" min="0.01" step="0.01" inputmode="numeric" required />
@@ -225,8 +226,8 @@
               </select>
             </label>
             <label>FX to <span id="specialCreateBaseCurrency">TWD</span>
-              <input id="specialFxRate" type="number" min="0.000001" step="0.000001" inputmode="decimal" placeholder="0.22" />
-              <small id="specialCreateFxHelp">Example: 1 local unit = 0.22 base units.</small>
+              <input id="specialFxRate" type="number" min="0.000001" step="0.000001" inputmode="decimal" placeholder="1.00" />
+              <small id="specialCreateFxHelp">Enter the base-currency value of 1 unit of the selected currency.</small>
             </label>
           </div>
         </div>
@@ -373,14 +374,14 @@
           <h2>Wallets & transfers</h2>
         </div>
       </div>
-      <p class="helper">A transfer changes where trip money is held. It does not count as spending.</p>
+      <p class="helper">A transfer changes where money in this Special Budget is held. It does not count as spending.</p>
       <div id="specialWalletList"></div>
 
       <div class="subsection">
         <h3>Add wallet</h3>
         <form id="specialWalletForm" class="detail-form">
           <label>Name
-            <input id="specialWalletName" type="text" maxlength="40" placeholder="Suica" required />
+            <input id="specialWalletName" type="text" maxlength="40" placeholder="Wallet name" required />
           </label>
           <label>Currency
             <select id="specialWalletCurrency"></select>
@@ -411,7 +412,7 @@
             <input id="specialTransferDate" type="date" required />
           </label>
           <label>Note
-            <input id="specialTransferNote" type="text" maxlength="100" placeholder="Suica top-up" />
+            <input id="specialTransferNote" type="text" maxlength="100" placeholder="Optional note" />
           </label>
           <button class="primary span-2" type="submit">Record transfer</button>
         </form>

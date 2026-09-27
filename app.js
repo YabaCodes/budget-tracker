@@ -499,9 +499,88 @@ function renderRegularCategories(){
   const b=ensureMonthBudget(selectedMonth),sm=regularSpentByCategory(selectedMonth),wrap=$("categoryList");$("categoryMonthLabel").textContent=monthLabel(selectedMonth);wrap.innerHTML="";
   Object.entries(b).forEach(([n,bv])=>{const bud=Number(bv)||0,used=sm[n]||0,rem=bud-used,pct=bud?Math.min(100,used/bud*100):(used?100:0),st=status(used,bud,selectedMonth),row=document.createElement("div");row.className="category-row";row.innerHTML=`<div class="category-top"><div><div class="category-name">${esc(n)}</div><div class="category-meta">${displayMoney(used)} spent · ${displayMoney(Math.max(0,rem))} remaining${displayCurrency()!==baseCurrency()?` · ${money(used)} base`:""}</div><span class="status ${st}">${statusLabel(st)}</span></div><div class="budget-amount-block"><strong>${displayMoney(bud)}</strong>${baseReferenceHtml(bud)}</div></div><div class="progress"><div class="progress-fill ${st}" style="width:${pct}%"></div></div>`;wrap.appendChild(row)})
 }
+function createBudgetEditorRow(name,value){
+  const row=document.createElement("div");
+  row.className="budget-editor-row";
+  row.dataset.category=name;
+
+  const main=document.createElement("label");
+  main.className="budget-editor-field";
+  const title=document.createElement("span");
+  title.className="budget-editor-name";
+  title.textContent=name;
+  const input=document.createElement("input");
+  input.type="number";
+  input.min="0";
+  input.step="1";
+  input.value=roundMoneyValue(Number(value)||0);
+  input.dataset.category=name;
+  main.appendChild(title);
+  main.appendChild(input);
+
+  const controls=document.createElement("div");
+  controls.className="budget-editor-controls";
+
+  const up=document.createElement("button");
+  up.type="button";
+  up.className="icon-order-btn";
+  up.textContent="↑";
+  up.setAttribute("aria-label",`Move ${name} up`);
+  up.title="Move up";
+  up.addEventListener("click",()=>{
+    const prev=row.previousElementSibling;
+    if(prev)row.parentElement.insertBefore(row,prev);
+    updateBudgetEditorControls()
+  });
+
+  const down=document.createElement("button");
+  down.type="button";
+  down.className="icon-order-btn";
+  down.textContent="↓";
+  down.setAttribute("aria-label",`Move ${name} down`);
+  down.title="Move down";
+  down.addEventListener("click",()=>{
+    const next=row.nextElementSibling;
+    if(next)row.parentElement.insertBefore(next,row);
+    updateBudgetEditorControls()
+  });
+
+  const remove=document.createElement("button");
+  remove.type="button";
+  remove.className="remove-category-btn";
+  remove.textContent="Remove";
+  remove.setAttribute("aria-label",`Remove ${name} category`);
+  remove.addEventListener("click",()=>{
+    row.remove();
+    updateBudgetEditorControls();
+    $("budgetSaveMessage").textContent=`${name} removed from the editor. Existing transactions are preserved. Tap Save budgets to apply.`
+  });
+
+  controls.appendChild(up);
+  controls.appendChild(down);
+  controls.appendChild(remove);
+  row.appendChild(main);
+  row.appendChild(controls);
+  return row
+}
+
+function updateBudgetEditorControls(){
+  const rows=[...$("budgetFields").querySelectorAll(".budget-editor-row")];
+  rows.forEach((row,index)=>{
+    const buttons=row.querySelectorAll(".icon-order-btn");
+    if(buttons[0])buttons[0].disabled=index===0;
+    if(buttons[1])buttons[1].disabled=index===rows.length-1
+  })
+}
+
 function renderBudgetEditor(){
-  const wrap=$("budgetFields");wrap.innerHTML="";$("budgetEditorTitle").textContent=`Edit ${monthLabel(selectedMonth)} budgets`;
-  Object.entries(ensureMonthBudget(selectedMonth)).forEach(([n,v])=>{const l=document.createElement("label");l.textContent=n;const i=document.createElement("input");i.type="number";i.min="0";i.step="1";i.value=roundMoneyValue(Number(v)||0);i.dataset.category=n;l.appendChild(i);wrap.appendChild(l)})
+  const wrap=$("budgetFields");
+  wrap.innerHTML="";
+  $("budgetEditorTitle").textContent=`Edit ${monthLabel(selectedMonth)} budgets`;
+  Object.entries(ensureMonthBudget(selectedMonth)).forEach(([name,value])=>{
+    wrap.appendChild(createBudgetEditorRow(name,value))
+  });
+  updateBudgetEditorControls()
 }
 
 function renderSpecialSummary(){
@@ -551,7 +630,7 @@ function fillCurrencySelect(sel,preferred){
 function renderSpecialWallets(s){
   if(s.type!=="travel")return;
   const wrap=$("specialWalletList");wrap.innerHTML="";
-  if(!(s.wallets||[]).length)wrap.innerHTML='<div class="empty">No trip wallets yet. Add Suica, cash, or another prepaid wallet below.</div>';
+  if(!(s.wallets||[]).length)wrap.innerHTML='<div class="empty">No wallets yet. Add a cash, card, or prepaid wallet below.</div>';
   (s.wallets||[]).forEach(w=>{const row=document.createElement("div");row.className="wallet-row";row.innerHTML=`<div><div class="wallet-name">${esc(w.name)}</div><div class="wallet-meta">${esc(w.currency)}</div></div><div class="wallet-right"><strong>${fmt(w.balance,w.currency)}</strong></div>`;wrap.appendChild(row)});
   fillCurrencySelect($("specialWalletCurrency"),s.localCurrency||"JPY");
   const expenseWallet=$("specialExpenseWallet"),to=$("specialTransferTo"),from=$("specialTransferFrom");
@@ -675,7 +754,7 @@ function renderHistory(){
 function renderCurrencyLabels(){
   const base=baseCurrency();
   ["quickBaseCurrency","detailBaseCurrency","newCategoryBaseCurrency","specialAllocationBaseCurrency","specialCreateBaseCurrency","increaseSpecialBaseCurrency","finishSpecialBaseCurrency","specialExpenseBaseCurrency","specialCategoryBaseCurrency","specialDisplayBaseCurrency","cashGoalBaseCurrency"].forEach(id=>{const el=$(id);if(el)el.textContent=base});
-  const fxHelp=$("specialCreateFxHelp");if(fxHelp)fxHelp.textContent=`Enter how many ${base} equal 1 unit of the trip currency.`;
+  const fxHelp=$("specialCreateFxHelp");if(fxHelp)fxHelp.textContent=`Enter how many ${base} equal 1 unit of the selected currency.`;
   const creator=$("specialCurrency");
   if(creator){const preferred=creator.value||"JPY";fillCurrencySelect(creator,preferred)}
 }
@@ -701,7 +780,7 @@ function renderBaseMigrationControls(){
   if(hasData){
     $("baseCurrencyMigrationText").textContent=`You already have financial data. v8 will convert all base-currency values instead of relabeling them.`;
     $("baseMigrationRateLabel").childNodes[0].nodeValue=`1 ${current} = how many ${next}? `;
-    $("baseMigrationHelp").textContent=`Example: enter the number of ${next} equal to 1 ${current}.`;
+    $("baseMigrationHelp").textContent=`Enter how many ${next} equal 1 ${current}.`;
   }else{
     $("baseCurrencyMigrationText").textContent=`No spending history or allocated money exists yet. The app will switch to ${next} without converting the starter category amounts. Review those amounts afterward.`;
   }
@@ -839,8 +918,43 @@ $("closeBudgetsBtn").addEventListener("click",()=>{
   $("budgetEditor").hidden=true;
   $("editBudgetsBtn").textContent="Edit budgets";
 });
-$("stageCategoryBtn").addEventListener("click",()=>{const n=$("newCategoryName").value.trim(),v=Number($("newCategoryBudget").value);if(!n||!Number.isFinite(v)||v<0){$("budgetSaveMessage").textContent="Enter a name and valid budget.";return}const l=document.createElement("label");l.textContent=n;const i=document.createElement("input");i.type="number";i.min="0";i.step="1";i.value=roundMoneyValue(v);i.dataset.category=n;l.appendChild(i);$("budgetFields").appendChild(l);$("newCategoryName").value="";$("newCategoryBudget").value="";$("budgetSaveMessage").textContent="Category staged. Tap Save budgets."});
-$("saveBudgetsBtn").addEventListener("click",()=>{const u={};$("budgetFields").querySelectorAll("input[data-category]").forEach(i=>{const v=Number(i.value);if(Number.isFinite(v)&&v>=0)u[i.dataset.category]=roundMoneyValue(v)});const sc=document.querySelector('input[name="budgetScope"]:checked')?.value||"month";monthBudgets[selectedMonth]=clone(u);if(sc==="future"){templateBudgets=clone(u);Object.keys(monthBudgets).forEach(m=>{if(m>selectedMonth)monthBudgets[m]=clone(u)})}persist();$("budgetSaveMessage").textContent="Budget saved.";renderAll();setTimeout(()=>{$("budgetEditor").hidden=true;$("editBudgetsBtn").textContent="Edit budgets";$("budgetSaveMessage").textContent=""},700)});
+$("stageCategoryBtn").addEventListener("click",()=>{
+  const name=$("newCategoryName").value.trim(),value=Number($("newCategoryBudget").value);
+  if(!name||!Number.isFinite(value)||value<0){$("budgetSaveMessage").textContent="Enter a name and valid budget.";return}
+  const existing=[...$("budgetFields").querySelectorAll(".budget-editor-row")].some(row=>row.dataset.category.toLowerCase()===name.toLowerCase());
+  if(existing){$("budgetSaveMessage").textContent="That category is already in the editor.";return}
+  $("budgetFields").appendChild(createBudgetEditorRow(name,value));
+  updateBudgetEditorControls();
+  $("newCategoryName").value="";
+  $("newCategoryBudget").value="";
+  $("budgetSaveMessage").textContent="Category staged. Tap Save budgets."
+});
+$("saveBudgetsBtn").addEventListener("click",()=>{
+  const updated={};
+  $("budgetFields").querySelectorAll(".budget-editor-row").forEach(row=>{
+    const input=row.querySelector("input[data-category]");
+    if(!input)return;
+    const value=Number(input.value);
+    if(Number.isFinite(value)&&value>=0)updated[input.dataset.category]=roundMoneyValue(value)
+  });
+  const scope=document.querySelector('input[name="budgetScope"]:checked')?.value||"month";
+  monthBudgets[selectedMonth]=clone(updated);
+  if(scope==="future"){
+    templateBudgets=clone(updated);
+    Object.keys(monthBudgets).forEach(month=>{
+      if(month>selectedMonth)monthBudgets[month]=clone(updated)
+    });
+    settings.quickCategories=(settings.quickCategories||[]).filter(name=>name in templateBudgets)
+  }
+  persist();
+  $("budgetSaveMessage").textContent="Budget categories and order saved.";
+  renderAll();
+  setTimeout(()=>{
+    $("budgetEditor").hidden=true;
+    $("editBudgetsBtn").textContent="Edit budgets";
+    $("budgetSaveMessage").textContent=""
+  },700)
+});
 
 $("openSpecialCreatorBtn").addEventListener("click",()=>{$("specialCreator").hidden=false});
 $("closeSpecialCreatorBtn").addEventListener("click",()=>{$("specialCreator").hidden=true});
@@ -923,7 +1037,7 @@ $("undoBtn").addEventListener("click",()=>{if(!lastUndo)return;if(lastUndo.kind=
 $("trendCategory").addEventListener("change",renderCategoryTrend);
 $("clearSelectedMonthBtn").addEventListener("click",()=>{if(!confirm(`Delete ALL regular expenses for ${monthLabel(selectedMonth)}? Special Budget activity will not be touched.`))return;regularExpenses=regularExpenses.filter(e=>monthKey(e.date)!==selectedMonth||isMigratedV6TripExpense(e));persist();renderAll()});
 
-$("exportBackupBtn").addEventListener("click",()=>{const data={version:"8.1",exportedAt:new Date().toISOString(),reserveBase,templateBudgets,monthBudgets,regularExpenses,specialBudgets,settings};downloadText(`budget-tracker-backup-${todayISO()}.json`,JSON.stringify(data,null,2),"application/json");$("backupMessage").textContent="Backup exported."});
+$("exportBackupBtn").addEventListener("click",()=>{const data={version:"8.2.1",exportedAt:new Date().toISOString(),reserveBase,templateBudgets,monthBudgets,regularExpenses,specialBudgets,settings};downloadText(`budget-tracker-backup-${todayISO()}.json`,JSON.stringify(data,null,2),"application/json");$("backupMessage").textContent="Backup exported."});
 $("exportCsvBtn").addEventListener("click",()=>{
   const header=["Scope","Special_Budget","Date","Category","Original_Amount","Currency","FX_to_Base","Amount_Base","Base_Currency","Note"],rows=[];
   regularExpenses.filter(e=>!isMigratedV6TripExpense(e)).forEach(e=>rows.push(["Regular","",e.date,e.category,e.amount,baseCurrency(),1,e.amount,baseCurrency(),e.note||""]));
