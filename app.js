@@ -20,6 +20,10 @@ const TYPE_META={
 };
 const CURRENCIES=["TWD","ETB","JPY","USD","EUR","GBP","CHF","CNY","HKD","SGD","KRW","AUD","CAD","AED","SAR","THB","INR","NZD","SEK","NOK","DKK","ZAR"];
 const CURRENCY_SYMBOLS={TWD:"NT$",ETB:"Br",JPY:"¥",USD:"$",EUR:"€",GBP:"£",CHF:"CHF",CNY:"CN¥",HKD:"HK$",SGD:"S$",KRW:"₩",AUD:"A$",CAD:"C$",AED:"AED",SAR:"SAR",THB:"฿",INR:"₹",NZD:"NZ$",SEK:"SEK",NOK:"NOK",DKK:"DKK",ZAR:"R"};
+const CATEGORY_CHART_COLORS=[
+  "#2563EB","#7C3AED","#0891B2","#DB2777","#4F46E5","#64748B",
+  "#0EA5E9","#9333EA","#475569","#0369A1","#A21CAF","#1D4ED8"
+];
 const DEFAULT_SETTINGS={
   migrationNoticeDismissed:false,
   theme:"classic-functional",
@@ -103,6 +107,7 @@ let selectedMonth=currentMonthKey();
 let selectedQuickCategory="Food & groceries";
 let selectedSpecialId="";
 let selectedSpecialType="travel";
+let selectedInsightCategory="";
 let privacyHidden=true;
 let lastUndo=null,undoTimer=null;
 
@@ -128,10 +133,10 @@ function normalizeSpecialBudgets(list){
   if(!Array.isArray(list))return[];
   return list.map(raw=>{
     const s={...raw};
-    s.allocatedBase=Math.max(0,Number(s.allocatedBase ?? s.allocatedBase ?? 0)||0);
-    s.returnedBase=Math.max(0,Number(s.returnedBase ?? s.returnedBase ?? 0)||0);
-    s.retainedUnreturnedBase=Math.max(0,Number(s.retainedUnreturnedBase ?? s.retainedUnreturnedBase ?? 0)||0);
-    delete s.allocatedBase; delete s.returnedBase; delete s.retainedUnreturnedBase;
+    s.allocatedBase=Math.max(0,Number(s.allocatedBase ?? s.allocatedTwd ?? 0)||0);
+    s.returnedBase=Math.max(0,Number(s.returnedBase ?? s.returnedTwd ?? 0)||0);
+    s.retainedUnreturnedBase=Math.max(0,Number(s.retainedUnreturnedBase ?? s.retainedUnreturnedTwd ?? 0)||0);
+    delete s.allocatedTwd; delete s.returnedTwd; delete s.retainedUnreturnedTwd;
     s.localCurrency=String(s.localCurrency||baseCurrency()).toUpperCase();
     s.fxRate=Math.max(0.000001,Number(s.fxRate)||1); // 1 local unit = fxRate base units
     s.categories=s.categories&&typeof s.categories==="object"?s.categories:{};
@@ -577,7 +582,64 @@ function renderSpecialTransactions(s){
   })
 }
 
+function categoryColorMap(mk){
+  const ordered=[...Object.keys(ensureMonthBudget(mk))];
+  regularForMonth(mk).forEach(e=>{if(!ordered.includes(e.category))ordered.push(e.category)});
+  const map={};ordered.forEach((name,i)=>map[name]=CATEGORY_CHART_COLORS[i%CATEGORY_CHART_COLORS.length]);return map
+}
+function renderCategoryBreakdownDetail(entries,total,colorMap){
+  const detail=$("categoryBreakdownDetail");
+  if(!entries.length){detail.hidden=true;return}
+  if(!entries.some(x=>x.name===selectedInsightCategory))selectedInsightCategory=entries[0].name;
+  const item=entries.find(x=>x.name===selectedInsightCategory)||entries[0],pct=total?item.amount/total*100:0;
+  detail.hidden=false;
+  $("categoryDetailDot").style.background=colorMap[item.name]||CATEGORY_CHART_COLORS[0];
+  $("categoryDetailName").textContent=item.name;
+  $("categoryDetailAmount").textContent=displayMoney(item.amount);
+  $("categoryDetailPercent").textContent=`${pct.toFixed(pct<10?1:0)}% of total spending`;
+  const txWrap=$("categoryDetailTransactions");txWrap.innerHTML="";
+  const rows=regularForMonth(selectedMonth).filter(e=>e.category===item.name).sort((a,b)=>b.date.localeCompare(a.date)||b.createdAt-a.createdAt).slice(0,5);
+  if(!rows.length){txWrap.innerHTML='<div class="empty">No transactions in this category.</div>';return}
+  rows.forEach(e=>{
+    const r=document.createElement("div");r.className="insight-transaction-row";
+    r.innerHTML=`<div><div class="expense-name">${esc(e.note||e.category)}</div><div class="expense-meta">${esc(e.date)}</div></div><strong>${displayMoney(e.amount)}</strong>`;
+    txWrap.appendChild(r)
+  })
+}
+function renderSpendingByCategory(){
+  const spentMap=regularSpentByCategory(selectedMonth),colorMap=categoryColorMap(selectedMonth);
+  const entries=Object.entries(spentMap).map(([name,amount])=>({name,amount:Number(amount)||0})).filter(x=>x.amount>0).sort((a,b)=>b.amount-a.amount);
+  const total=entries.reduce((sum,x)=>sum+x.amount,0);
+  $("categoryBreakdownMonth").textContent=monthLabel(selectedMonth);
+  const empty=$("categoryBreakdownEmpty"),content=$("categoryBreakdownContent"),detail=$("categoryBreakdownDetail");
+  if(!entries.length){empty.hidden=false;content.hidden=true;detail.hidden=true;$("categoryDonutChart").innerHTML="";$("categoryDonutLegend").innerHTML="";return}
+  empty.hidden=true;content.hidden=false;
+  if(!entries.some(x=>x.name===selectedInsightCategory))selectedInsightCategory=entries[0].name;
+  $("categoryDonutTotal").textContent=displayMoney(total);
+
+  const svg=$("categoryDonutChart");svg.innerHTML="";
+  const NS="http://www.w3.org/2000/svg",r=78,circ=2*Math.PI*r;let offset=0;
+  entries.forEach(item=>{
+    const fraction=item.amount/total,seg=document.createElementNS(NS,"circle");
+    seg.setAttribute("cx","110");seg.setAttribute("cy","110");seg.setAttribute("r",String(r));seg.setAttribute("fill","none");
+    seg.setAttribute("stroke",colorMap[item.name]);seg.setAttribute("stroke-width",item.name===selectedInsightCategory?"42":"38");
+    seg.setAttribute("stroke-dasharray",`${fraction*circ} ${circ-fraction*circ}`);seg.setAttribute("stroke-dashoffset",String(-offset*circ));
+    seg.setAttribute("transform","rotate(-90 110 110)");seg.setAttribute("class","donut-segment");seg.setAttribute("tabindex","0");
+    seg.setAttribute("role","button");seg.setAttribute("aria-label",`${item.name}: ${displayMoney(item.amount)}, ${(fraction*100).toFixed(0)} percent`);
+    const choose=()=>{selectedInsightCategory=item.name;renderSpendingByCategory()};seg.addEventListener("click",choose);seg.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();choose()}});svg.appendChild(seg);offset+=fraction
+  });
+
+  const legend=$("categoryDonutLegend");legend.innerHTML="";
+  entries.forEach(item=>{
+    const pct=total?item.amount/total*100:0,b=document.createElement("button");b.type="button";b.className="donut-legend-row"+(item.name===selectedInsightCategory?" selected":"");
+    b.innerHTML=`<span class="legend-main"><span class="legend-dot" style="background:${colorMap[item.name]}"></span><span class="legend-name">${esc(item.name)}</span></span><span class="legend-value"><strong>${displayMoney(item.amount)}</strong><small>${pct.toFixed(pct<10?1:0)}%</small></span>`;
+    b.addEventListener("click",()=>{selectedInsightCategory=item.name;renderSpendingByCategory()});legend.appendChild(b)
+  });
+  renderCategoryBreakdownDetail(entries,total,colorMap)
+}
+
 function renderInsights(){
+  renderSpendingByCategory();
   const sc=scoreForMonth(selectedMonth),b=totalRegularBudget(selectedMonth),sp=totalRegularSpent(selectedMonth),u=b?sp/b:0,e=elapsedRatio(selectedMonth);
   $("budgetScore").textContent=sc+" / 100";$("scoreSummary").textContent=sc>=90?"Excellent regular budget control.":sc>=80?"Strong month with a few areas to watch.":sc>=70?"Generally on track.":"Several regular categories need adjustment.";
   $("pacePercent").textContent=(u*100).toFixed(0)+"%";$("paceInsight").textContent=selectedMonth===currentMonthKey()?`${(e*100).toFixed(0)}% of the month has passed.`:(u<=1?"Finished within regular budget.":"Finished over regular budget.");
@@ -861,7 +923,7 @@ $("undoBtn").addEventListener("click",()=>{if(!lastUndo)return;if(lastUndo.kind=
 $("trendCategory").addEventListener("change",renderCategoryTrend);
 $("clearSelectedMonthBtn").addEventListener("click",()=>{if(!confirm(`Delete ALL regular expenses for ${monthLabel(selectedMonth)}? Special Budget activity will not be touched.`))return;regularExpenses=regularExpenses.filter(e=>monthKey(e.date)!==selectedMonth||isMigratedV6TripExpense(e));persist();renderAll()});
 
-$("exportBackupBtn").addEventListener("click",()=>{const data={version:8,exportedAt:new Date().toISOString(),reserveBase,templateBudgets,monthBudgets,regularExpenses,specialBudgets,settings};downloadText(`budget-tracker-backup-${todayISO()}.json`,JSON.stringify(data,null,2),"application/json");$("backupMessage").textContent="Backup exported."});
+$("exportBackupBtn").addEventListener("click",()=>{const data={version:"8.1",exportedAt:new Date().toISOString(),reserveBase,templateBudgets,monthBudgets,regularExpenses,specialBudgets,settings};downloadText(`budget-tracker-backup-${todayISO()}.json`,JSON.stringify(data,null,2),"application/json");$("backupMessage").textContent="Backup exported."});
 $("exportCsvBtn").addEventListener("click",()=>{
   const header=["Scope","Special_Budget","Date","Category","Original_Amount","Currency","FX_to_Base","Amount_Base","Base_Currency","Note"],rows=[];
   regularExpenses.filter(e=>!isMigratedV6TripExpense(e)).forEach(e=>rows.push(["Regular","",e.date,e.category,e.amount,baseCurrency(),1,e.amount,baseCurrency(),e.note||""]));

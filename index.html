@@ -445,6 +445,47 @@
       </article>
     </section>
 
+    <section class="card spending-category-card">
+      <div class="card-head">
+        <div>
+          <p class="eyebrow">Regular spending only</p>
+          <h2>Spending by category</h2>
+        </div>
+        <span id="categoryBreakdownMonth" class="chart-period"></span>
+      </div>
+      <div id="categoryBreakdownEmpty" class="empty" hidden>No regular spending recorded for this month yet.</div>
+      <div id="categoryBreakdownContent" class="category-breakdown">
+        <div class="donut-shell" aria-label="Spending by category donut chart">
+          <svg id="categoryDonutChart" class="donut-chart" viewBox="0 0 220 220" role="img" aria-label="Regular spending by category"></svg>
+          <div class="donut-center">
+            <span>Total spent</span>
+            <strong id="categoryDonutTotal">—</strong>
+          </div>
+        </div>
+        <div id="categoryDonutLegend" class="donut-legend"></div>
+      </div>
+      <div id="categoryBreakdownDetail" class="category-breakdown-detail" hidden>
+        <div class="category-detail-head">
+          <div class="category-detail-title">
+            <span id="categoryDetailDot" class="legend-dot"></span>
+            <div>
+              <span class="card-label">Selected category</span>
+              <h3 id="categoryDetailName">—</h3>
+            </div>
+          </div>
+          <div class="category-detail-amount">
+            <strong id="categoryDetailAmount">—</strong>
+            <span id="categoryDetailPercent">—</span>
+          </div>
+        </div>
+        <div class="subsection category-detail-transactions">
+          <div class="card-head compact"><h3>Recent transactions</h3></div>
+          <div id="categoryDetailTransactions"></div>
+        </div>
+      </div>
+      <p class="helper category-chart-help">Tap a slice or category to inspect it. Transfers are excluded because they are not spending.</p>
+    </section>
+
     <section class="card">
       <div class="card-head"><div><p class="eyebrow">Regular spending only</p><h2>Monthly trend</h2></div></div>
       <div id="monthlyTrendChart" class="bar-chart"></div>
