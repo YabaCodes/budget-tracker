@@ -1,7 +1,6 @@
 (() => {
 "use strict";
 
-const GOAL=300000;
 const DEFAULT_BUDGETS={
   "Rent":23000,"Sister's rent":7600,"Tithe":8200,"Family support":3500,"Utilities":1750,
   "SIM":799,"Home Wi‑Fi":899,"Apple One":390,"iCloud+":300,"Gym":1088,"Transportation":1000,
@@ -19,7 +18,17 @@ const TYPE_META={
   event:{label:"Event",icon:"🎉"},
   other:{label:"Other",icon:"📦"}
 };
-const CURRENCIES=["TWD","JPY","USD","EUR","CHF","KRW","GBP"];
+const CURRENCIES=["TWD","ETB","JPY","USD","EUR","GBP","CHF","CNY","HKD","SGD","KRW","AUD","CAD","AED","SAR","THB","INR","NZD","SEK","NOK","DKK","ZAR"];
+const CURRENCY_SYMBOLS={TWD:"NT$",ETB:"Br",JPY:"¥",USD:"$",EUR:"€",GBP:"£",CHF:"CHF",CNY:"CN¥",HKD:"HK$",SGD:"S$",KRW:"₩",AUD:"A$",CAD:"C$",AED:"AED",SAR:"SAR",THB:"฿",INR:"₹",NZD:"NZ$",SEK:"SEK",NOK:"NOK",DKK:"DKK",ZAR:"R"};
+const DEFAULT_SETTINGS={
+  migrationNoticeDismissed:false,
+  theme:"classic-functional",
+  baseCurrency:"TWD",
+  displayCurrency:"TWD",
+  displayFxToBase:1,
+  cashGoalBase:300000,
+  quickCategories:["Food & groceries","Transportation","Miscellaneous","Dating"]
+};
 
 const STORAGE={
   legacyBudgets:"budgetTracker.budgets.v1",
@@ -37,8 +46,36 @@ const STORAGE={
 
 const $=id=>document.getElementById(id);
 const clone=x=>JSON.parse(JSON.stringify(x));
-const money=x=>"NT$"+Math.round(Number(x)||0).toLocaleString("en-US");
-const fmt=(x,c)=>`${c} ${Number(x||0).toLocaleString("en-US",{maximumFractionDigits:2})}`;
+function currencyText(value,code){
+  code=String(code||"TWD").toUpperCase();
+  const n=Number(value)||0;
+  const decimals=["USD","EUR","GBP","CHF","AUD","CAD","NZD","SGD","HKD","AED","SAR"].includes(code)?2:0;
+  const formatted=n.toLocaleString("en-US",{minimumFractionDigits:0,maximumFractionDigits:decimals});
+  const symbol=CURRENCY_SYMBOLS[code]||code;
+  return ["CHF","AED","SAR","SEK","NOK","DKK"].includes(code)?`${symbol} ${formatted}`:`${symbol}${formatted}`;
+}
+function baseCurrency(){return String(settings?.baseCurrency||"TWD").toUpperCase()}
+function displayCurrency(){return String(settings?.displayCurrency||baseCurrency()).toUpperCase()}
+function displayFxToBase(){
+  if(displayCurrency()===baseCurrency())return 1;
+  const r=Number(settings?.displayFxToBase);
+  return Number.isFinite(r)&&r>0?r:1;
+}
+function money(x){return currencyText(x,baseCurrency())}
+function displayMoney(x){return currencyText((Number(x)||0)/displayFxToBase(),displayCurrency())}
+function fmt(x,c){return currencyText(x,c)}
+function maskedMoney(code){const symbol=CURRENCY_SYMBOLS[code]||code;return `${symbol}••••••`}
+function baseReferenceText(x){return displayCurrency()===baseCurrency()?"":`≈ ${money(x)}`}
+function baseReferenceHtml(x){const t=baseReferenceText(x);return t?`<div class="base-reference">${t}</div>`:""}
+function setBaseReference(id,x,{masked=false}={}){
+  const el=$(id);if(!el)return;
+  let sub=el.nextElementSibling;
+  if(!sub||!sub.classList.contains("base-reference")){
+    sub=document.createElement("div");sub.className="base-reference";el.insertAdjacentElement("afterend",sub)
+  }
+  if(displayCurrency()===baseCurrency()){sub.hidden=true;sub.textContent="";return}
+  sub.hidden=false;sub.textContent=masked?`≈ ${maskedMoney(baseCurrency())}`:`≈ ${money(x)}`
+}
 const uid=p=>`${p}-${Date.now()}-${Math.random().toString(36).slice(2,9)}`;
 
 function todayISO(){const d=new Date(),l=new Date(d.getTime()-d.getTimezoneOffset()*60000);return l.toISOString().slice(0,10)}
@@ -54,8 +91,14 @@ let templateBudgets=loadJSON(STORAGE.templateBudgets,legacyBudgets);
 let monthBudgets=loadJSON(STORAGE.monthBudgets,{});
 let regularExpenses=normalizeRegular(loadJSON(STORAGE.regularExpenses,[]));
 let specialBudgets=loadJSON(STORAGE.specialBudgets,[]);
-let settings=loadJSON(STORAGE.settings,{migrationNoticeDismissed:false,theme:"earthy-sunset"});
-let reserveTwd=0;
+let settings={...DEFAULT_SETTINGS,...loadJSON(STORAGE.settings,{})};
+if(!CURRENCIES.includes(String(settings.baseCurrency||"").toUpperCase()))settings.baseCurrency="TWD";
+if(!CURRENCIES.includes(String(settings.displayCurrency||"").toUpperCase()))settings.displayCurrency=settings.baseCurrency;
+if(!Number.isFinite(Number(settings.displayFxToBase))||Number(settings.displayFxToBase)<=0)settings.displayFxToBase=1;
+if(!Number.isFinite(Number(settings.cashGoalBase))||Number(settings.cashGoalBase)<0)settings.cashGoalBase=300000;
+if(!Array.isArray(settings.quickCategories))settings.quickCategories=clone(DEFAULT_SETTINGS.quickCategories);
+settings.theme="classic-functional";
+let reserveBase=0;
 let selectedMonth=currentMonthKey();
 let selectedQuickCategory="Food & groceries";
 let selectedSpecialId="";
@@ -64,8 +107,8 @@ let privacyHidden=true;
 let lastUndo=null,undoTimer=null;
 
 function applyTheme(){
-  if(!settings.theme) settings.theme="earthy-sunset";
-  document.documentElement.dataset.theme=settings.theme;
+  settings.theme="classic-functional";
+  document.documentElement.dataset.theme="classic-functional";
 }
 
 function normalizeRegular(list){
@@ -81,16 +124,82 @@ function normalizeRegular(list){
   }));
 }
 
+function normalizeSpecialBudgets(list){
+  if(!Array.isArray(list))return[];
+  return list.map(raw=>{
+    const s={...raw};
+    s.allocatedBase=Math.max(0,Number(s.allocatedBase ?? s.allocatedBase ?? 0)||0);
+    s.returnedBase=Math.max(0,Number(s.returnedBase ?? s.returnedBase ?? 0)||0);
+    s.retainedUnreturnedBase=Math.max(0,Number(s.retainedUnreturnedBase ?? s.retainedUnreturnedBase ?? 0)||0);
+    delete s.allocatedBase; delete s.returnedBase; delete s.retainedUnreturnedBase;
+    s.localCurrency=String(s.localCurrency||baseCurrency()).toUpperCase();
+    s.fxRate=Math.max(0.000001,Number(s.fxRate)||1); // 1 local unit = fxRate base units
+    s.categories=s.categories&&typeof s.categories==="object"?s.categories:{};
+    s.wallets=Array.isArray(s.wallets)?s.wallets:[];
+    s.transfers=Array.isArray(s.transfers)?s.transfers:[];
+    s.expenses=Array.isArray(s.expenses)?s.expenses.map(e=>{
+      const x={...e};
+      x.amountBase=Math.max(0,Number(x.amountBase ?? x.amountTwd ?? x.amount ?? 0)||0);
+      delete x.amountTwd;
+      x.currency=String(x.currency||baseCurrency()).toUpperCase();
+      x.fxRate=Math.max(0.000001,Number(x.fxRate)||1);
+      x.originalAmount=Math.max(0,Number(x.originalAmount ?? x.amountBase)||0);
+      return x
+    }):[];
+    return s
+  })
+}
+specialBudgets=normalizeSpecialBudgets(specialBudgets);
+
+function hasFinancialActivity(){
+  return reserveBase>0 || regularExpenses.length>0 || specialBudgets.length>0;
+}
+function roundMoneyValue(v){return Math.round((Number(v)||0)*100)/100}
+function scaleObjectValues(obj,factor){
+  Object.keys(obj||{}).forEach(k=>obj[k]=roundMoneyValue((Number(obj[k])||0)*factor))
+}
+function convertBaseCurrency(newCode,factor){
+  const old=baseCurrency();
+  factor=Number(factor);
+  if(!CURRENCIES.includes(newCode)||newCode===old)return true;
+  if(!Number.isFinite(factor)||factor<=0)return false;
+
+  reserveBase=roundMoneyValue(reserveBase*factor);
+  settings.cashGoalBase=roundMoneyValue(Number(settings.cashGoalBase||0)*factor);
+  scaleObjectValues(templateBudgets,factor);
+  Object.values(monthBudgets).forEach(b=>scaleObjectValues(b,factor));
+  regularExpenses.forEach(e=>e.amount=roundMoneyValue(Number(e.amount||0)*factor));
+
+  specialBudgets.forEach(s=>{
+    s.allocatedBase=roundMoneyValue(Number(s.allocatedBase||0)*factor);
+    s.returnedBase=roundMoneyValue(Number(s.returnedBase||0)*factor);
+    s.retainedUnreturnedBase=roundMoneyValue(Number(s.retainedUnreturnedBase||0)*factor);
+    scaleObjectValues(s.categories,factor);
+    const wasBaseLocal=s.localCurrency===old;
+    if(s.type!=="travel"&&wasBaseLocal){s.localCurrency=newCode;s.fxRate=1}
+    else s.fxRate=roundMoneyValue(Number(s.fxRate||1)*factor);
+    (s.expenses||[]).forEach(e=>{
+      e.amountBase=roundMoneyValue(Number(e.amountBase||0)*factor);
+      e.fxRate=roundMoneyValue(Number(e.fxRate||1)*factor)
+    })
+  });
+
+  settings.baseCurrency=newCode;
+  settings.displayCurrency=newCode;
+  settings.displayFxToBase=1;
+  return true
+}
+
 function initReserve(){
   const saved=localStorage.getItem(STORAGE.reserve);
-  if(saved!==null){reserveTwd=Math.max(0,Number(saved)||0);return}
+  if(saved!==null){reserveBase=Math.max(0,Number(saved)||0);return}
   const v6accounts=loadJSON(STORAGE.v6Accounts,[]);
   if(Array.isArray(v6accounts)&&v6accounts.length){
     const included=v6accounts.filter(a=>a.includeInReserve&&a.currency==="TWD").reduce((s,a)=>s+(Number(a.balance)||0),0);
-    if(included>0){reserveTwd=included;localStorage.setItem(STORAGE.reserve,String(reserveTwd));return}
+    if(included>0){reserveBase=included;localStorage.setItem(STORAGE.reserve,String(reserveBase));return}
   }
-  reserveTwd=Math.max(0,Number(localStorage.getItem(STORAGE.legacyCash)||0));
-  localStorage.setItem(STORAGE.reserve,String(reserveTwd));
+  reserveBase=Math.max(0,Number(localStorage.getItem(STORAGE.legacyCash)||0));
+  localStorage.setItem(STORAGE.reserve,String(reserveBase));
 }
 
 function migrateV6Trips(){
@@ -113,7 +222,7 @@ function migrateV6Trips(){
       originalAmount:Number(e.originalAmount??e.amount)||0,
       currency:String(e.currency||"TWD"),
       fxRate:Number(e.fxRate)||1,
-      amountTwd:Number(e.amount)||0,
+      amountBase:Number(e.amount)||0,
       category:e.category,
       date:e.date,
       note:e.note||"",
@@ -137,7 +246,7 @@ function migrateV6Trips(){
       id:t.id||uid("special"),
       type:"travel",
       name:String(t.name||"Imported trip"),
-      allocatedTwd:Number(t.budgetTwd)||0,
+      allocatedBase:Number(t.budgetTwd)||0,
       startDate:t.startDate||todayISO(),
       endDate:t.endDate||todayISO(),
       localCurrency:t.localCurrency||"JPY",
@@ -158,8 +267,8 @@ function persist(){
   localStorage.setItem(STORAGE.monthBudgets,JSON.stringify(monthBudgets));
   localStorage.setItem(STORAGE.legacyBudgets,JSON.stringify(templateBudgets));
   localStorage.setItem(STORAGE.regularExpenses,JSON.stringify(regularExpenses));
-  localStorage.setItem(STORAGE.reserve,String(reserveTwd));
-  localStorage.setItem(STORAGE.legacyCash,String(reserveTwd));
+  localStorage.setItem(STORAGE.reserve,String(reserveBase));
+  localStorage.setItem(STORAGE.legacyCash,String(reserveBase));
   localStorage.setItem(STORAGE.specialBudgets,JSON.stringify(specialBudgets));
   localStorage.setItem(STORAGE.settings,JSON.stringify(settings));
 }
@@ -170,28 +279,27 @@ const regularForMonth=mk=>regularExpenses.filter(e=>monthKey(e.date)===mk&&!isMi
 const totalRegularSpent=mk=>regularForMonth(mk).reduce((s,e)=>s+Number(e.amount||0),0);
 const totalRegularBudget=mk=>Object.values(ensureMonthBudget(mk)).reduce((s,v)=>s+Number(v||0),0);
 function regularSpentByCategory(mk){const o={};Object.keys(ensureMonthBudget(mk)).forEach(k=>o[k]=0);regularForMonth(mk).forEach(e=>o[e.category]=(o[e.category]||0)+Number(e.amount||0));return o}
-function specialSpent(s){return (s.expenses||[]).reduce((sum,e)=>sum+Number(e.amountTwd||0),0)}
-function specialRemaining(s){return Number(s.allocatedTwd||0)-specialSpent(s)}
+function specialSpent(s){return (s.expenses||[]).reduce((sum,e)=>sum+Number(e.amountBase||0),0)}
+function specialRemaining(s){return Number(s.allocatedBase||0)-specialSpent(s)}
 const activeSpecials=()=>specialBudgets.filter(s=>s.status==="active");
 const archivedSpecials=()=>specialBudgets.filter(s=>s.status==="archived");
 const specialById=id=>specialBudgets.find(s=>s.id===id);
 
-// v7.3: each Special Budget can choose its own local display currency.
-// TWD remains the accounting/base currency everywhere.
+// Each Special Budget can choose a local reference currency. The app base currency remains the accounting currency.
 function specialCurrencyCode(s){
-  const code=String(s?.localCurrency||"TWD").toUpperCase();
-  return CURRENCIES.includes(code)?code:"TWD";
+  const code=String(s?.localCurrency||baseCurrency()).toUpperCase();
+  return CURRENCIES.includes(code)?code:baseCurrency();
 }
 function specialFxRate(s){
   const code=specialCurrencyCode(s);
-  if(code==="TWD")return 1;
+  if(code===baseCurrency())return 1;
   const rate=Number(s?.fxRate);
   return Number.isFinite(rate)&&rate>0?rate:null;
 }
 function localCurrencyText(twd,s,{masked=false}={}){
   if(!s)return "";
   const code=specialCurrencyCode(s),rate=specialFxRate(s);
-  if(code==="TWD"||!rate)return "";
+  if(code===baseCurrency()||!rate)return "";
   if(masked)return `≈ ${code} ••••••`;
   const local=(Number(twd)||0)/rate;
   const zeroDecimal=["JPY","KRW"].includes(code);
@@ -241,26 +349,26 @@ function renderSpecialCurrencySettings(s){
   fillCurrencySelect(sel,specialCurrencyCode(s));
   const code=specialCurrencyCode(s);
   const input=$("specialDisplayFxRate");
-  input.value=code==="TWD"?"1":(Number(s.fxRate)||"");
-  input.disabled=code==="TWD";
-  $("specialDisplayFxHelp").textContent=code==="TWD"?"TWD is the main currency.":`1 ${code} = NT$${Number(input.value||0).toLocaleString("en-US",{maximumFractionDigits:6})}`;
+  input.value=code===baseCurrency()?"1":(Number(s.fxRate)||"");
+  input.disabled=code===baseCurrency();
+  $("specialDisplayFxHelp").textContent=code===baseCurrency()?`${baseCurrency()} is the accounting currency.`:`1 ${code} = ${currencyText(Number(input.value||0),baseCurrency())}`;
   updateSpecialCurrencyPreview(s)
 }
 function updateSpecialCurrencyPreview(s){
   if(!s)return;
   const code=$("specialDisplayCurrency").value||specialCurrencyCode(s);
-  const rate=code==="TWD"?1:Number($("specialDisplayFxRate").value);
-  if(code==="TWD"){
-    $("specialCurrencyPreview").textContent="NT$1,000 · no secondary conversion";
-    $("specialDisplayFxHelp").textContent="TWD is the main currency.";
+  const rate=code===baseCurrency()?1:Number($("specialDisplayFxRate").value);
+  if(code===baseCurrency()){
+    $("specialCurrencyPreview").textContent=`${money(1000)} · no secondary conversion`;
+    $("specialDisplayFxHelp").textContent=`${baseCurrency()} is the accounting currency.`;
     $("specialDisplayFxRate").disabled=true;
     return
   }
   $("specialDisplayFxRate").disabled=false;
-  $("specialDisplayFxHelp").textContent=`1 ${code} = NT$${Number.isFinite(rate)&&rate>0?rate.toLocaleString("en-US",{maximumFractionDigits:6}):"?"}`;
+  $("specialDisplayFxHelp").textContent=`1 ${code} = ${Number.isFinite(rate)&&rate>0?currencyText(rate,baseCurrency()):"?"}`;
   const temp={localCurrency:code,fxRate:rate};
   const text=localCurrencyText(1000,temp);
-  $("specialCurrencyPreview").textContent=text?`NT$1,000 ${text}`:"Enter a valid FX rate to preview the conversion."
+  $("specialCurrencyPreview").textContent=text?`${money(1000)} ${text}`:"Enter a valid FX rate to preview the conversion."
 }
 
 function availableMonths(){
@@ -349,26 +457,34 @@ function renderMonthSelect(){
   if(!months.includes(selectedMonth))selectedMonth=currentMonthKey();s.value=selectedMonth
 }
 function renderReserve(){
-  const pct=Math.min(100,reserveTwd/GOAL*100),left=Math.max(0,GOAL-reserveTwd);
-  $("cashReserve").textContent=privacyHidden?"NT$••••••":money(reserveTwd);
+  const goal=Math.max(0,Number(settings.cashGoalBase)||0),pct=goal>0?Math.min(100,reserveBase/goal*100):0,left=Math.max(0,goal-reserveBase);
+  $("cashReserve").textContent=privacyHidden?maskedMoney(displayCurrency()):displayMoney(reserveBase);
+  setBaseReference("cashReserve",reserveBase,{masked:privacyHidden});
   $("goalPercent").textContent=privacyHidden?"•••%":pct.toFixed(1)+"%";
-  $("goalRemaining").textContent=privacyHidden?"NT$•••••• to goal":money(left)+" to goal";
-  $("goalBar").style.width=pct+"%";$("privacyBtn").textContent=privacyHidden?"👁":"🙈";$("reserveInput").value=Math.round(reserveTwd);
-  const act=activeSpecials(),alloc=act.reduce((x,s)=>x+Number(s.allocatedTwd||0),0),spent=act.reduce((x,s)=>x+specialSpent(s),0),remain=act.reduce((x,s)=>x+Math.max(0,specialRemaining(s)),0);
+  $("goalRemaining").textContent=privacyHidden?`${maskedMoney(displayCurrency())} to goal`:`${displayMoney(left)} to goal`;
+  setBaseReference("goalRemaining",left,{masked:privacyHidden});
+  $("goalBar").style.width=pct+"%";$("goalBar").className="progress-fill good";
+  $("privacyBtn").textContent=privacyHidden?"👁":"🙈";$("reserveInput").value=roundMoneyValue(reserveBase);
+  $("reserveInputLabel").textContent=`Available reserve (${baseCurrency()})`;
+  const act=activeSpecials(),alloc=act.reduce((x,s)=>x+Number(s.allocatedBase||0),0),spent=act.reduce((x,s)=>x+specialSpent(s),0),remain=act.reduce((x,s)=>x+Math.max(0,specialRemaining(s)),0);
   $("activeSpecialAllocated").textContent=money(alloc);$("activeSpecialSpent").textContent=money(spent);$("activeSpecialRemaining").textContent=money(remain);
 }
 function renderRegularSummary(){
-  const spent=totalRegularSpent(selectedMonth),budget=totalRegularBudget(selectedMonth),rem=budget-spent,u=budget?spent/budget:0;
+  const spent=totalRegularSpent(selectedMonth),budget=totalRegularBudget(selectedMonth),rem=budget-spent,u=budget?spent/budget:0,st=status(spent,budget,selectedMonth);
   $("monthSummaryTitle").textContent=`${monthLabel(selectedMonth)} regular budget`;
-  $("monthlyBudget").textContent=money(budget);$("monthlySpent").textContent=money(spent);$("monthlyRemaining").textContent=money(Math.max(0,rem));
-  $("monthBudgetBar").style.width=Math.min(100,u*100)+"%";
+  $("monthlyBudget").textContent=displayMoney(budget);$("monthlySpent").textContent=displayMoney(spent);$("monthlyRemaining").textContent=displayMoney(Math.max(0,rem));
+  setBaseReference("monthlyBudget",budget);setBaseReference("monthlySpent",spent);setBaseReference("monthlyRemaining",Math.max(0,rem));
+  $("monthBudgetBar").style.width=Math.min(100,u*100)+"%";$("monthBudgetBar").className=`progress-fill ${st}`;
   if(selectedMonth===currentMonthKey()){const e=elapsedRatio(selectedMonth);$("paceMessage").textContent=u>e+.05?`Regular spending is ahead of pace: ${(u*100).toFixed(0)}% used with ${(e*100).toFixed(0)}% of the month elapsed.`:`Regular spending pace looks controlled: ${(u*100).toFixed(0)}% used with ${(e*100).toFixed(0)}% of the month elapsed.`}
-  else $("paceMessage").textContent=rem>=0?`${money(rem)} finished unspent.`:`${money(Math.abs(rem))} over budget.`
+  else $("paceMessage").textContent=rem>=0?`${displayMoney(rem)} finished unspent.`:`${displayMoney(Math.abs(rem))} over budget.`
 }
 function renderQuickCategories(){
-  const b=ensureMonthBudget(currentMonthKey()),names=Object.keys(b),wrap=$("quickCategories");
-  if(!(selectedQuickCategory in b))selectedQuickCategory=names[0]||"Miscellaneous";wrap.innerHTML="";
-  names.slice(0,8).forEach(n=>{const btn=document.createElement("button");btn.type="button";btn.className="chip"+(n===selectedQuickCategory?" active":"");btn.textContent=n.replace(" & groceries","");btn.addEventListener("click",()=>{selectedQuickCategory=n;renderQuickCategories();$("quickMessage").textContent=`Selected: ${n}`});wrap.appendChild(btn)})
+  const b=ensureMonthBudget(currentMonthKey()),all=Object.keys(b),wrap=$("quickCategories");
+  let names=(settings.quickCategories||[]).filter(n=>n in b);
+  if(!names.length)names=DEFAULT_SETTINGS.quickCategories.filter(n=>n in b);
+  if(!names.length)names=all.slice(0,4);
+  if(!names.includes(selectedQuickCategory))selectedQuickCategory=names[0]||"Miscellaneous";wrap.innerHTML="";
+  names.forEach(n=>{const btn=document.createElement("button");btn.type="button";btn.className="chip"+(n===selectedQuickCategory?" active":"");btn.textContent=n.replace(" & groceries","");btn.addEventListener("click",()=>{selectedQuickCategory=n;renderQuickCategories();$("quickMessage").textContent=`Selected: ${n}`});wrap.appendChild(btn)})
 }
 function renderDetailCategory(){
   const s=$("detailCategory"),prev=s.value,b=ensureMonthBudget(currentMonthKey());s.innerHTML="";
@@ -376,32 +492,34 @@ function renderDetailCategory(){
 }
 function renderRegularCategories(){
   const b=ensureMonthBudget(selectedMonth),sm=regularSpentByCategory(selectedMonth),wrap=$("categoryList");$("categoryMonthLabel").textContent=monthLabel(selectedMonth);wrap.innerHTML="";
-  Object.entries(b).forEach(([n,bv])=>{const bud=Number(bv)||0,used=sm[n]||0,rem=bud-used,pct=bud?Math.min(100,used/bud*100):(used?100:0),st=status(used,bud,selectedMonth),row=document.createElement("div");row.className="category-row";row.innerHTML=`<div class="category-top"><div><div class="category-name">${esc(n)}</div><div class="category-meta">${money(used)} spent · ${money(Math.max(0,rem))} remaining</div><span class="status ${st}">${statusLabel(st)}</span></div><div class="budget-amount-block"><strong>${money(bud)}</strong></div></div><div class="progress"><div class="progress-fill" style="width:${pct}%"></div></div>`;wrap.appendChild(row)})
+  Object.entries(b).forEach(([n,bv])=>{const bud=Number(bv)||0,used=sm[n]||0,rem=bud-used,pct=bud?Math.min(100,used/bud*100):(used?100:0),st=status(used,bud,selectedMonth),row=document.createElement("div");row.className="category-row";row.innerHTML=`<div class="category-top"><div><div class="category-name">${esc(n)}</div><div class="category-meta">${displayMoney(used)} spent · ${displayMoney(Math.max(0,rem))} remaining${displayCurrency()!==baseCurrency()?` · ${money(used)} base`:""}</div><span class="status ${st}">${statusLabel(st)}</span></div><div class="budget-amount-block"><strong>${displayMoney(bud)}</strong>${baseReferenceHtml(bud)}</div></div><div class="progress"><div class="progress-fill ${st}" style="width:${pct}%"></div></div>`;wrap.appendChild(row)})
 }
 function renderBudgetEditor(){
   const wrap=$("budgetFields");wrap.innerHTML="";$("budgetEditorTitle").textContent=`Edit ${monthLabel(selectedMonth)} budgets`;
-  Object.entries(ensureMonthBudget(selectedMonth)).forEach(([n,v])=>{const l=document.createElement("label");l.textContent=n;const i=document.createElement("input");i.type="number";i.min="0";i.step="1";i.value=Math.round(Number(v)||0);i.dataset.category=n;l.appendChild(i);wrap.appendChild(l)})
+  Object.entries(ensureMonthBudget(selectedMonth)).forEach(([n,v])=>{const l=document.createElement("label");l.textContent=n;const i=document.createElement("input");i.type="number";i.min="0";i.step="1";i.value=roundMoneyValue(Number(v)||0);i.dataset.category=n;l.appendChild(i);wrap.appendChild(l)})
 }
 
 function renderSpecialSummary(){
   const wrap=$("specialBudgetSummaryList"),act=activeSpecials();wrap.innerHTML="";
   if(!act.length){wrap.innerHTML='<div class="empty">No active Special Budgets.</div>';return}
-  act.forEach(s=>{const spent=specialSpent(s),rem=specialRemaining(s),st=specialSpendStatus(spent,s.allocatedTwd,s),row=document.createElement("div");row.className="special-row";row.dataset.specialType=s.type;row.innerHTML=`<div><div class="special-name">${TYPE_META[s.type]?.icon||"📦"} ${esc(s.name)}</div><div class="special-meta">${TYPE_META[s.type]?.label||"Special"} · ${money(spent)} spent</div><span class="status ${st}">${statusLabel(st)}</span></div><div class="special-right"><strong>${money(Math.max(0,rem))}</strong>${localCurrencyHtml(Math.max(0,rem),s)}<div class="special-meta">remaining</div></div>`;row.addEventListener("click",()=>{selectedSpecialId=s.id;renderSpecialPanel();renderTabs("special")});wrap.appendChild(row)})
+  act.forEach(s=>{const spent=specialSpent(s),rem=specialRemaining(s),st=specialSpendStatus(spent,s.allocatedBase,s),row=document.createElement("div");row.className="special-row";row.dataset.specialType=s.type;row.innerHTML=`<div><div class="special-name">${TYPE_META[s.type]?.icon||"📦"} ${esc(s.name)}</div><div class="special-meta">${TYPE_META[s.type]?.label||"Special"} · ${money(spent)} spent</div><span class="status ${st}">${statusLabel(st)}</span></div><div class="special-right"><strong>${money(Math.max(0,rem))}</strong>${localCurrencyHtml(Math.max(0,rem),s)}<div class="special-meta">remaining</div></div>`;row.addEventListener("click",()=>{selectedSpecialId=s.id;renderSpecialPanel();renderTabs("special")});wrap.appendChild(row)})
 }
 function renderSpecialPanel(){
   const s=specialById(selectedSpecialId)||activeSpecials()[0];if(!s)return;selectedSpecialId=s.id;
   $("tab-special").dataset.specialType=s.type;
+  ["increaseSpecialBaseCurrency","finishSpecialBaseCurrency","specialExpenseBaseCurrency","specialCategoryBaseCurrency"].forEach(id=>{const el=$(id);if(el)el.textContent=baseCurrency()});
   $("specialCategoryEditor").hidden=true;
   $("showSpecialCategoryEditorBtn").textContent="Edit";
-  const spent=specialSpent(s),rem=specialRemaining(s),pct=s.allocatedTwd?Math.min(100,spent/s.allocatedTwd*100):0,meta=TYPE_META[s.type]||TYPE_META.other;
+  const spent=specialSpent(s),rem=specialRemaining(s),pct=s.allocatedBase?Math.min(100,spent/s.allocatedBase*100):0,meta=TYPE_META[s.type]||TYPE_META.other;
   $("specialTypeLabel").textContent=meta.label;$("specialTitle").textContent=s.name;$("specialDates").textContent=`${s.startDate} → ${s.endDate}`;
-  $("specialRemaining").textContent=money(Math.max(0,rem));$("specialAllocated").textContent=money(s.allocatedTwd);$("specialSpent").textContent=money(spent);
-  setLocalBelow("specialRemaining",Math.max(0,rem),s);setLocalBelow("specialAllocated",s.allocatedTwd,s);setLocalBelow("specialSpent",spent,s);
+  $("specialRemaining").textContent=money(Math.max(0,rem));$("specialAllocated").textContent=money(s.allocatedBase);$("specialSpent").textContent=money(spent);
+  setLocalBelow("specialRemaining",Math.max(0,rem),s);setLocalBelow("specialAllocated",s.allocatedBase,s);setLocalBelow("specialSpent",spent,s);
   $("specialProgressBar").style.width=pct+"%";$("finishReturnAmount").value=Math.max(0,Math.floor(rem));
-  const overallStatus=specialSpendStatus(spent,s.allocatedTwd,s);
+  const overallStatus=specialSpendStatus(spent,s.allocatedBase,s);
+  $("specialProgressBar").className=`progress-fill ${overallStatus}`;
   $("specialOverallStatus").className=`status ${overallStatus}`;
   $("specialOverallStatus").textContent=statusLabel(overallStatus);
-  $("specialPaceText").textContent=specialStatusDetail(spent,s.allocatedTwd,s);
+  $("specialPaceText").textContent=specialStatusDetail(spent,s.allocatedBase,s);
   renderSpecialCurrencySettings(s);renderSpecialCategorySelect(s);renderSpecialCategories(s);renderSpecialWallets(s);renderSpecialTransactions(s);
   const travel=s.type==="travel";$("travelWalletSection").hidden=!travel;$("specialExpenseCurrencyWrap").hidden=!travel;$("specialExpenseFxWrap").hidden=!travel;$("specialExpenseWalletWrap").hidden=!travel;
   if(travel){
@@ -413,14 +531,14 @@ function renderSpecialCategorySelect(s){
   Object.keys(s.categories||{}).forEach(n=>{const o=document.createElement("option");o.value=n;o.textContent=n;sel.appendChild(o)});if(prev in(s.categories||{}))sel.value=prev
 }
 function renderSpecialCategories(s){
-  const spentMap={};(s.expenses||[]).forEach(e=>spentMap[e.category]=(spentMap[e.category]||0)+Number(e.amountTwd||0));
+  const spentMap={};(s.expenses||[]).forEach(e=>spentMap[e.category]=(spentMap[e.category]||0)+Number(e.amountBase||0));
   const wrap=$("specialCategoryList");wrap.innerHTML="";
-  Object.entries(s.categories||{}).forEach(([n,bv])=>{const bud=Number(bv)||0,used=spentMap[n]||0,rem=bud-used,pct=bud?Math.min(100,used/bud*100):(used?100:0),st=specialSpendStatus(used,bud,s),row=document.createElement("div");row.className="category-row";row.innerHTML=`<div class="category-top"><div><div class="category-name">${esc(n)}</div><div class="category-meta">${money(used)} spent${bud?` · ${money(Math.max(0,rem))} category balance`:""}</div><span class="status ${st}">${statusLabel(st)}</span><span class="category-status-detail">${esc(specialStatusDetail(used,bud,s))}</span></div><div class="budget-amount-block"><strong>${money(bud)}</strong>${localCurrencyHtml(bud,s)}</div></div><div class="progress"><div class="progress-fill" style="width:${pct}%"></div></div>`;wrap.appendChild(row)});
+  Object.entries(s.categories||{}).forEach(([n,bv])=>{const bud=Number(bv)||0,used=spentMap[n]||0,rem=bud-used,pct=bud?Math.min(100,used/bud*100):(used?100:0),st=specialSpendStatus(used,bud,s),row=document.createElement("div");row.className="category-row";row.innerHTML=`<div class="category-top"><div><div class="category-name">${esc(n)}</div><div class="category-meta">${money(used)} spent${bud?` · ${money(Math.max(0,rem))} category balance`:""}</div><span class="status ${st}">${statusLabel(st)}</span><span class="category-status-detail">${esc(specialStatusDetail(used,bud,s))}</span></div><div class="budget-amount-block"><strong>${money(bud)}</strong>${localCurrencyHtml(bud,s)}</div></div><div class="progress"><div class="progress-fill ${st}" style="width:${pct}%"></div></div>`;wrap.appendChild(row)});
   renderSpecialCategoryEditor(s)
 }
 function renderSpecialCategoryEditor(s){
   const wrap=$("specialCategoryFields");wrap.innerHTML="";
-  Object.entries(s.categories||{}).forEach(([n,v])=>{const l=document.createElement("label");l.textContent=n;const i=document.createElement("input");i.type="number";i.min="0";i.step="1";i.value=Math.round(Number(v)||0);i.dataset.category=n;l.appendChild(i);wrap.appendChild(l);attachEditorLocal(i,s)})
+  Object.entries(s.categories||{}).forEach(([n,v])=>{const l=document.createElement("label");l.textContent=n;const i=document.createElement("input");i.type="number";i.min="0";i.step="1";i.value=roundMoneyValue(Number(v)||0);i.dataset.category=n;l.appendChild(i);wrap.appendChild(l);attachEditorLocal(i,s)})
 }
 function fillCurrencySelect(sel,preferred){
   sel.innerHTML="";CURRENCIES.forEach(c=>{const o=document.createElement("option");o.value=c;o.textContent=c;sel.appendChild(o)});if(CURRENCIES.includes(preferred))sel.value=preferred
@@ -447,11 +565,11 @@ function renderSpecialTransactions(s){
     const row=document.createElement("div");row.className="expense-row";
     if(it.kind==="expense"){
       const e=it.data,w=(s.wallets||[]).find(x=>x.id===e.walletId);
-      const orig=e.currency!=="TWD"?`<div class="expense-meta">${fmt(e.originalAmount,e.currency)} → ${money(e.amountTwd)}</div>`:"";
-      row.innerHTML=`<div class="expense-top"><div><div class="expense-name">${esc(e.category)}</div><div class="expense-meta">${esc(e.date)}${e.note?" · "+esc(e.note):""}${w?" · "+esc(w.name):""}</div></div><div class="special-right"><strong>${money(e.amountTwd)}</strong>${orig}</div></div>`;
+      const orig=e.currency!==baseCurrency()?`<div class="expense-meta">${fmt(e.originalAmount,e.currency)} → ${money(e.amountBase)}</div>`:"";
+      row.innerHTML=`<div class="expense-top"><div><div class="expense-name">${esc(e.category)}</div><div class="expense-meta">${esc(e.date)}${e.note?" · "+esc(e.note):""}${w?" · "+esc(w.name):""}</div></div><div class="special-right"><strong>${money(e.amountBase)}</strong>${orig}</div></div>`;
       const b=document.createElement("button");b.type="button";b.className="delete-btn";b.textContent="Delete";b.addEventListener("click",()=>deleteSpecialExpense(s.id,e.id));row.appendChild(b)
     }else{
-      const t=it.data,fw=t.fromWalletId==="pool"?{name:"Budget pool",currency:"TWD"}:(s.wallets||[]).find(x=>x.id===t.fromWalletId),tw=(s.wallets||[]).find(x=>x.id===t.toWalletId);
+      const t=it.data,fw=t.fromWalletId==="pool"?{name:"Budget pool",currency:baseCurrency()}:(s.wallets||[]).find(x=>x.id===t.fromWalletId),tw=(s.wallets||[]).find(x=>x.id===t.toWalletId);
       row.innerHTML=`<div class="expense-top"><div><div class="expense-name">Transfer · ${esc(fw?.name||"Unknown")} → ${esc(tw?.name||"Unknown")}</div><div class="expense-meta">${esc(t.date)}${t.note?" · "+esc(t.note):""}</div></div><div class="special-right"><strong>${fmt(t.toAmount,tw?.currency||"")}</strong><div class="expense-meta">Not spending</div></div></div>`;
       const b=document.createElement("button");b.type="button";b.className="delete-btn";b.textContent="Delete & reverse";b.addEventListener("click",()=>deleteSpecialTransfer(s.id,t.id));row.appendChild(b)
     }
@@ -465,11 +583,11 @@ function renderInsights(){
   $("pacePercent").textContent=(u*100).toFixed(0)+"%";$("paceInsight").textContent=selectedMonth===currentMonthKey()?`${(e*100).toFixed(0)}% of the month has passed.`:(u<=1?"Finished within regular budget.":"Finished over regular budget.");
   const wrap=$("specialInsightsList");wrap.innerHTML="";const all=[...activeSpecials(),...archivedSpecials()];
   if(!all.length)wrap.innerHTML='<div class="empty">No Special Budget history yet.</div>';
-  all.forEach(s=>{const r=document.createElement("div");r.className="special-row";r.innerHTML=`<div><div class="special-name">${TYPE_META[s.type]?.icon||"📦"} ${esc(s.name)}</div><div class="special-meta">${s.status==="active"?"Active":"Archived"} · allocated ${money(s.allocatedTwd)} ${localCurrencyText(s.allocatedTwd,s)?`· ${localCurrencyText(s.allocatedTwd,s)}`:""}</div></div><div class="special-right"><strong>${money(specialSpent(s))}</strong>${localCurrencyHtml(specialSpent(s),s)}<div class="special-meta">spent</div></div>`;wrap.appendChild(r)})
+  all.forEach(s=>{const r=document.createElement("div");r.className="special-row";r.innerHTML=`<div><div class="special-name">${TYPE_META[s.type]?.icon||"📦"} ${esc(s.name)}</div><div class="special-meta">${s.status==="active"?"Active":"Archived"} · allocated ${money(s.allocatedBase)} ${localCurrencyText(s.allocatedBase,s)?`· ${localCurrencyText(s.allocatedBase,s)}`:""}</div></div><div class="special-right"><strong>${money(specialSpent(s))}</strong>${localCurrencyHtml(specialSpent(s),s)}<div class="special-meta">spent</div></div>`;wrap.appendChild(r)})
 }
 function renderMonthlyTrend(){
   const months=trendMonths(6),data=months.map(m=>({m,spent:totalRegularSpent(m),budget:totalRegularBudget(m)})),max=Math.max(1,...data.map(d=>Math.max(d.spent,d.budget))),wrap=$("monthlyTrendChart");wrap.innerHTML="";
-  data.forEach(d=>{const h=Math.max(2,Math.round(d.spent/max*100)),c=document.createElement("div");c.className="bar-col";c.innerHTML=`<div class="bar-value">${money(d.spent)}</div><div class="bar-track"><div class="bar-fill" style="height:${h}%"></div></div><div class="bar-label">${shortMonth(d.m)}</div>`;wrap.appendChild(c)})
+  data.forEach(d=>{const h=Math.max(2,Math.round(d.spent/max*100)),c=document.createElement("div");c.className="bar-col";c.innerHTML=`<div class="bar-value">${displayMoney(d.spent)}</div><div class="bar-track"><div class="bar-fill" style="height:${h}%"></div></div><div class="bar-label">${shortMonth(d.m)}</div>`;wrap.appendChild(c)})
 }
 function renderTrendSelect(){
   const s=$("trendCategory"),prev=s.value||"Food & groceries",b=ensureMonthBudget(selectedMonth);s.innerHTML="";Object.keys(b).forEach(n=>{const o=document.createElement("option");o.value=n;o.textContent=n;s.appendChild(o)});if(prev in b)s.value=prev
@@ -479,21 +597,83 @@ function renderCategoryTrend(){
   const maxY=Math.max(1,...pts.map(p=>Math.max(p.spent,p.budget))),W=560,H=190,L=42,R=18,T=18,B=34,CW=W-L-R,CH=H-T-B,x=i=>L+(pts.length<=1?CW/2:i/(pts.length-1)*CW),y=v=>T+CH-(v/maxY*CH);
   const sp=pts.map((p,i)=>`${i?"L":"M"} ${x(i).toFixed(1)} ${y(p.spent).toFixed(1)}`).join(" "),bp=pts.map((p,i)=>`${i?"L":"M"} ${x(i).toFixed(1)} ${y(p.budget).toFixed(1)}`).join(" ");
   let svg=`<svg viewBox="0 0 ${W} ${H}">`;[0,.5,1].forEach(f=>{const yy=T+CH-f*CH;svg+=`<line class="chart-grid" x1="${L}" y1="${yy}" x2="${W-R}" y2="${yy}"></line><text class="chart-text" x="2" y="${yy+3}">${Math.round(maxY*f)}</text>`});svg+=`<path class="chart-budget" d="${bp}"></path><path class="chart-line" d="${sp}"></path>`;pts.forEach((p,i)=>svg+=`<circle class="chart-dot" cx="${x(i)}" cy="${y(p.spent)}" r="4"></circle><text class="chart-text" text-anchor="middle" x="${x(i)}" y="${H-8}">${shortMonth(p.m)}</text>`);svg+="</svg>";$("categoryTrendChart").innerHTML=svg;
-  const vals=pts.map(p=>p.spent),avg=vals.reduce((a,b)=>a+b,0)/vals.length,nz=vals.filter(v=>v>0);let dir="Stable";if(nz.length>=2){const c=(nz[nz.length-1]-nz[0])/nz[0];if(c<=-.1)dir="Improving";else if(c>=.1)dir="Rising"}$("trendAverage").textContent=money(avg);$("trendBudget").textContent=money(Number(ensureMonthBudget(selectedMonth)[cat])||0);$("trendDirection").textContent=dir
+  const vals=pts.map(p=>p.spent),avg=vals.reduce((a,b)=>a+b,0)/vals.length,nz=vals.filter(v=>v>0);let dir="Stable";if(nz.length>=2){const c=(nz[nz.length-1]-nz[0])/nz[0];if(c<=-.1)dir="Improving";else if(c>=.1)dir="Rising"}$("trendAverage").textContent=displayMoney(avg);$("trendBudget").textContent=displayMoney(Number(ensureMonthBudget(selectedMonth)[cat])||0);$("trendDirection").textContent=dir
 }
 function renderHistory(){
   const body=$("historyTableBody");body.innerHTML="";
-  availableMonths().forEach(m=>{const b=totalRegularBudget(m),s=totalRegularSpent(m),v=b-s,tr=document.createElement("tr");tr.innerHTML=`<td>${monthLabel(m)}</td><td>${money(b)}</td><td>${money(s)}</td><td class="${v>=0?"positive":"negative"}">${v>=0?"+":"−"}${money(Math.abs(v))}</td><td>${scoreForMonth(m)}</td>`;body.appendChild(tr)});
+  availableMonths().forEach(m=>{const b=totalRegularBudget(m),s=totalRegularSpent(m),v=b-s,tr=document.createElement("tr");tr.innerHTML=`<td>${monthLabel(m)}</td><td>${displayMoney(b)}</td><td>${displayMoney(s)}</td><td class="${v>=0?"positive":"negative"}">${v>=0?"+":"−"}${displayMoney(Math.abs(v))}</td><td>${scoreForMonth(m)}</td>`;body.appendChild(tr)});
   const wrap=$("expenseList"),rows=[...regularForMonth(selectedMonth)].sort((a,b)=>b.date.localeCompare(a.date)||b.createdAt-a.createdAt);$("historyTitle").textContent=`${monthLabel(selectedMonth)} regular expenses`;wrap.innerHTML="";
   if(!rows.length)wrap.innerHTML='<div class="empty">No regular expenses for this month.</div>';
-  rows.forEach(e=>{const r=document.createElement("div");r.className="expense-row";r.innerHTML=`<div class="expense-top"><div><div class="expense-name">${esc(e.category)}</div><div class="expense-meta">${esc(e.date)}${e.note?" · "+esc(e.note):""}</div></div><strong>${money(e.amount)}</strong></div>`;const b=document.createElement("button");b.type="button";b.className="delete-btn";b.textContent="Delete";b.addEventListener("click",()=>deleteRegularExpense(e.id));r.appendChild(b);wrap.appendChild(r)});
+  rows.forEach(e=>{const r=document.createElement("div");r.className="expense-row";r.innerHTML=`<div class="expense-top"><div><div class="expense-name">${esc(e.category)}</div><div class="expense-meta">${esc(e.date)}${e.note?" · "+esc(e.note):""}</div></div><div class="budget-amount-block"><strong>${displayMoney(e.amount)}</strong>${baseReferenceHtml(e.amount)}</div></div>`;const b=document.createElement("button");b.type="button";b.className="delete-btn";b.textContent="Delete";b.addEventListener("click",()=>deleteRegularExpense(e.id));r.appendChild(b);wrap.appendChild(r)});
   const ar=$("archivedSpecialList");ar.innerHTML="";if(!archivedSpecials().length)ar.innerHTML='<div class="empty">No archived Special Budgets yet.</div>';
-  archivedSpecials().forEach(s=>{const r=document.createElement("div");r.className="special-row";r.innerHTML=`<div><div class="special-name">${TYPE_META[s.type]?.icon||"📦"} ${esc(s.name)}</div><div class="special-meta">Allocated ${money(s.allocatedTwd)} · returned ${money(s.returnedTwd||0)}</div></div><div class="special-right"><strong>${money(specialSpent(s))}</strong>${localCurrencyHtml(specialSpent(s),s)}<div class="special-meta">spent</div></div>`;ar.appendChild(r)})
+  archivedSpecials().forEach(s=>{const r=document.createElement("div");r.className="special-row";r.innerHTML=`<div><div class="special-name">${TYPE_META[s.type]?.icon||"📦"} ${esc(s.name)}</div><div class="special-meta">Allocated ${money(s.allocatedBase)} · returned ${money(s.returnedBase||0)}</div></div><div class="special-right"><strong>${money(specialSpent(s))}</strong>${localCurrencyHtml(specialSpent(s),s)}<div class="special-meta">spent</div></div>`;ar.appendChild(r)})
+}
+
+
+function renderCurrencyLabels(){
+  const base=baseCurrency();
+  ["quickBaseCurrency","detailBaseCurrency","newCategoryBaseCurrency","specialAllocationBaseCurrency","specialCreateBaseCurrency","increaseSpecialBaseCurrency","finishSpecialBaseCurrency","specialExpenseBaseCurrency","specialCategoryBaseCurrency","specialDisplayBaseCurrency","cashGoalBaseCurrency"].forEach(id=>{const el=$(id);if(el)el.textContent=base});
+  const fxHelp=$("specialCreateFxHelp");if(fxHelp)fxHelp.textContent=`Enter how many ${base} equal 1 unit of the trip currency.`;
+  const creator=$("specialCurrency");
+  if(creator){const preferred=creator.value||"JPY";fillCurrencySelect(creator,preferred)}
+}
+function renderQuickCategorySettings(){
+  const wrap=$("quickCategorySettings");if(!wrap)return;wrap.innerHTML="";
+  const names=Object.keys(templateBudgets);
+  names.forEach(name=>{
+    const label=document.createElement("label");label.className="check-option";
+    const input=document.createElement("input");input.type="checkbox";input.value=name;input.checked=(settings.quickCategories||[]).includes(name);
+    const span=document.createElement("span");span.textContent=name;
+    label.appendChild(input);label.appendChild(span);wrap.appendChild(label)
+  })
+}
+function renderBaseMigrationControls(){
+  const sel=$("settingsBaseCurrency");if(!sel)return;
+  const next=sel.value,current=baseCurrency(),box=$("baseCurrencyMigrationBox");
+  if(next===current){box.hidden=true;return}
+  box.hidden=false;
+  const hasData=hasFinancialActivity();
+  $("baseMigrationRateLabel").hidden=!hasData;
+  $("baseMigrationRate").hidden=!hasData;
+  $("baseMigrationHelp").hidden=!hasData;
+  if(hasData){
+    $("baseCurrencyMigrationText").textContent=`You already have financial data. v8 will convert all base-currency values instead of relabeling them.`;
+    $("baseMigrationRateLabel").childNodes[0].nodeValue=`1 ${current} = how many ${next}? `;
+    $("baseMigrationHelp").textContent=`Example: enter the number of ${next} equal to 1 ${current}.`;
+  }else{
+    $("baseCurrencyMigrationText").textContent=`No spending history or allocated money exists yet. The app will switch to ${next} without converting the starter category amounts. Review those amounts afterward.`;
+  }
+}
+function updateDisplayCurrencyPreview(){
+  const code=$("settingsDisplayCurrency")?.value||displayCurrency(),base=baseCurrency(),input=$("settingsDisplayFxRate");
+  if(!input)return;
+  if(code===base){
+    input.value="1";input.disabled=true;
+    $("settingsDisplayFxHelp").textContent=`Display and accounting currency are both ${base}.`;
+    $("displayCurrencyPreview").textContent=`${money(1000)} stays ${money(1000)}.`;
+    return
+  }
+  input.disabled=false;
+  const rate=Number(input.value);
+  $("settingsDisplayFxHelp").textContent=`1 ${code} = ${Number.isFinite(rate)&&rate>0?currencyText(rate,base):"? base currency"}`;
+  $("displayCurrencyPreview").textContent=Number.isFinite(rate)&&rate>0?`${money(1000)} displays as ${currencyText(1000/rate,code)}.`:"Enter a valid FX rate."
+}
+function renderSettings(){
+  if(!$("settingsBaseCurrency"))return;
+  fillCurrencySelect($("settingsBaseCurrency"),baseCurrency());
+  fillCurrencySelect($("settingsDisplayCurrency"),displayCurrency());
+  $("currentBaseCurrency").textContent=baseCurrency();
+  $("settingsDisplayFxRate").value=displayCurrency()===baseCurrency()?1:Number(settings.displayFxToBase||1);
+  $("cashGoalInput").value=roundMoneyValue(Number(settings.cashGoalBase)||0);
+  $("cashGoalPreview").textContent=`Current goal: ${money(settings.cashGoalBase)}${displayCurrency()!==baseCurrency()?` · ${displayMoney(settings.cashGoalBase)} display`:""}`;
+  renderQuickCategorySettings();
+  renderBaseMigrationControls();
+  updateDisplayCurrencyPreview()
 }
 
 function renderAll(){
   ensureMonthBudget(currentMonthKey());ensureMonthBudget(selectedMonth);
-  renderSpecialTabs();renderMonthSelect();renderReserve();renderRegularSummary();renderQuickCategories();renderDetailCategory();renderRegularCategories();renderBudgetEditor();renderSpecialSummary();renderInsights();renderMonthlyTrend();renderTrendSelect();renderCategoryTrend();renderHistory();
+  renderCurrencyLabels();renderSpecialTabs();renderMonthSelect();renderReserve();renderRegularSummary();renderQuickCategories();renderDetailCategory();renderRegularCategories();renderBudgetEditor();renderSpecialSummary();renderInsights();renderMonthlyTrend();renderTrendSelect();renderCategoryTrend();renderHistory();renderSettings();
   $("migrationNotice").hidden=!!settings.migrationNoticeDismissed;
   if(selectedSpecialId&&specialById(selectedSpecialId)?.status==="active")renderSpecialPanel();
   persist()
@@ -501,12 +681,12 @@ function renderAll(){
 
 function addRegularExpense(amount,category,date,note){
   const v=Number(amount);if(!Number.isFinite(v)||v<=0||!category||!date)return null;
-  const e={id:uid("exp"),amount:Math.round(v),category,date,note:String(note||""),tripId:"",createdAt:Date.now()};regularExpenses.push(e);lastUndo={kind:"regular",expense:e};selectedMonth=monthKey(date);persist();showUndo(`${money(e.amount)} added to ${category}.`);return e
+  const e={id:uid("exp"),amount:roundMoneyValue(v),category,date,note:String(note||""),tripId:"",createdAt:Date.now()};regularExpenses.push(e);lastUndo={kind:"regular",expense:e};selectedMonth=monthKey(date);persist();showUndo(`${money(e.amount)} added to ${category}.`);return e
 }
 function deleteRegularExpense(id){if(!confirm("Delete this regular expense?"))return;regularExpenses=regularExpenses.filter(e=>e.id!==id);persist();renderAll()}
 function addSpecialExpense(s,{originalAmount,currency,fxRate,category,walletId,date,note}){
-  const amt=Number(originalAmount),rate=currency==="TWD"?1:Number(fxRate);if(!Number.isFinite(amt)||amt<=0||!Number.isFinite(rate)||rate<=0)return null;
-  const e={id:uid("sexp"),originalAmount:amt,currency,fxRate:rate,amountTwd:amt*rate,category,walletId:walletId||"",date,note:String(note||""),createdAt:Date.now()};
+  const amt=Number(originalAmount),rate=currency===baseCurrency()?1:Number(fxRate);if(!Number.isFinite(amt)||amt<=0||!Number.isFinite(rate)||rate<=0)return null;
+  const e={id:uid("sexp"),originalAmount:amt,currency,fxRate:rate,amountBase:roundMoneyValue(amt*rate),category,walletId:walletId||"",date,note:String(note||""),createdAt:Date.now()};
   if(walletId){const w=(s.wallets||[]).find(x=>x.id===walletId);if(!w)return null;w.balance=Number(w.balance||0)-amt}
   s.expenses=s.expenses||[];s.expenses.push(e);lastUndo={kind:"special",specialId:s.id,expense:e};persist();showUndo(`${fmt(amt,currency)} added to ${s.name}.`);return e
 }
@@ -530,8 +710,57 @@ document.querySelectorAll(".tab-btn").forEach(b=>b.addEventListener("click",()=>
 $("monthSelect").addEventListener("change",()=>{selectedMonth=$("monthSelect").value;$("budgetEditor").hidden=true;renderAll()});
 $("privacyBtn").addEventListener("click",()=>{privacyHidden=!privacyHidden;renderReserve()});
 $("toggleReserveEditorBtn").addEventListener("click",()=>{$("reserveEditor").hidden=!$("reserveEditor").hidden});
-$("saveReserveBtn").addEventListener("click",()=>{const v=Number($("reserveInput").value);if(!Number.isFinite(v)||v<0)return;reserveTwd=Math.round(v);$("reserveEditor").hidden=true;persist();renderReserve()});
+$("saveReserveBtn").addEventListener("click",()=>{const v=Number($("reserveInput").value);if(!Number.isFinite(v)||v<0)return;reserveBase=roundMoneyValue(v);$("reserveEditor").hidden=true;persist();renderReserve()});
 $("dismissMigrationNoticeBtn").addEventListener("click",()=>{settings.migrationNoticeDismissed=true;persist();$("migrationNotice").hidden=true});
+
+$("settingsBaseCurrency").addEventListener("change",renderBaseMigrationControls);
+$("baseMigrationRate").addEventListener("input",()=>{
+  const old=baseCurrency(),next=$("settingsBaseCurrency").value,rate=Number($("baseMigrationRate").value);
+  $("baseMigrationHelp").textContent=Number.isFinite(rate)&&rate>0?`${money(1000)} would become ${currencyText(1000*rate,next)}.`:`Enter how many ${next} equal 1 ${old}.`
+});
+$("saveBaseCurrencyBtn").addEventListener("click",()=>{
+  const next=$("settingsBaseCurrency").value,current=baseCurrency();
+  if(next===current){$("baseCurrencyMessage").textContent="Base currency is already set.";return}
+  if(!hasFinancialActivity()){
+    settings.baseCurrency=next;settings.displayCurrency=next;settings.displayFxToBase=1;
+    $("baseCurrencyMessage").textContent=`Base currency changed to ${next}. Review your starter budget amounts and cash goal.`;
+    persist();renderAll();return
+  }
+  const factor=Number($("baseMigrationRate").value);
+  if(!Number.isFinite(factor)||factor<=0){$("baseCurrencyMessage").textContent=`Enter the conversion rate from ${current} to ${next}.`;return}
+  if(!confirm(`Convert all accounting values from ${current} to ${next} using 1 ${current} = ${factor} ${next}? This changes stored base amounts.`))return;
+  if(!convertBaseCurrency(next,factor)){ $("baseCurrencyMessage").textContent="Could not change the base currency.";return}
+  $("baseCurrencyMessage").textContent=`Base currency changed to ${next}.`;
+  $("baseMigrationRate").value="";
+  persist();renderAll()
+});
+$("settingsDisplayCurrency").addEventListener("change",()=>{
+  const code=$("settingsDisplayCurrency").value;
+  if(code===baseCurrency())$("settingsDisplayFxRate").value="1";
+  updateDisplayCurrencyPreview()
+});
+$("settingsDisplayFxRate").addEventListener("input",updateDisplayCurrencyPreview);
+$("saveDisplayCurrencyBtn").addEventListener("click",()=>{
+  const code=$("settingsDisplayCurrency").value,rate=code===baseCurrency()?1:Number($("settingsDisplayFxRate").value);
+  if(code!==baseCurrency()&&(!Number.isFinite(rate)||rate<=0)){ $("displayCurrencyMessage").textContent="Enter a valid FX rate.";return}
+  settings.displayCurrency=code;settings.displayFxToBase=rate;
+  $("displayCurrencyMessage").textContent=code===baseCurrency()?`Main budget now displays in ${code}.`:`Main budget now displays in ${code}; records remain in ${baseCurrency()}.`;
+  persist();renderAll()
+});
+$("saveCashGoalBtn").addEventListener("click",()=>{
+  const v=Number($("cashGoalInput").value);
+  if(!Number.isFinite(v)||v<0){$("cashGoalMessage").textContent="Enter a valid cash goal.";return}
+  settings.cashGoalBase=roundMoneyValue(v);
+  $("cashGoalMessage").textContent=`Cash goal saved at ${money(settings.cashGoalBase)}.`;
+  persist();renderAll()
+});
+$("saveQuickCategoriesBtn").addEventListener("click",()=>{
+  const selected=[...$("quickCategorySettings").querySelectorAll('input[type="checkbox"]:checked')].map(i=>i.value);
+  if(!selected.length){$("quickCategorySettingsMessage").textContent="Choose at least one Quick Entry category.";return}
+  settings.quickCategories=selected;
+  $("quickCategorySettingsMessage").textContent="Quick Entry categories saved.";
+  persist();renderAll()
+});
 
 $("quickExpenseForm").addEventListener("submit",e=>{e.preventDefault();const x=addRegularExpense($("quickAmount").value,selectedQuickCategory,todayISO(),"");if(x){$("quickAmount").value="";$("quickMessage").textContent=`Added ${money(x.amount)} to ${x.category}.`;renderAll()}});
 $("moreDetailsBtn").addEventListener("click",()=>{const f=$("detailExpenseForm");f.hidden=!f.hidden;$("moreDetailsBtn").textContent=f.hidden?"More details":"Hide details";if(!f.hidden)$("detailDate").value=todayISO()});
@@ -548,25 +777,25 @@ $("closeBudgetsBtn").addEventListener("click",()=>{
   $("budgetEditor").hidden=true;
   $("editBudgetsBtn").textContent="Edit budgets";
 });
-$("stageCategoryBtn").addEventListener("click",()=>{const n=$("newCategoryName").value.trim(),v=Number($("newCategoryBudget").value);if(!n||!Number.isFinite(v)||v<0){$("budgetSaveMessage").textContent="Enter a name and valid budget.";return}const l=document.createElement("label");l.textContent=n;const i=document.createElement("input");i.type="number";i.min="0";i.step="1";i.value=Math.round(v);i.dataset.category=n;l.appendChild(i);$("budgetFields").appendChild(l);$("newCategoryName").value="";$("newCategoryBudget").value="";$("budgetSaveMessage").textContent="Category staged. Tap Save budgets."});
-$("saveBudgetsBtn").addEventListener("click",()=>{const u={};$("budgetFields").querySelectorAll("input[data-category]").forEach(i=>{const v=Number(i.value);if(Number.isFinite(v)&&v>=0)u[i.dataset.category]=Math.round(v)});const sc=document.querySelector('input[name="budgetScope"]:checked')?.value||"month";monthBudgets[selectedMonth]=clone(u);if(sc==="future"){templateBudgets=clone(u);Object.keys(monthBudgets).forEach(m=>{if(m>selectedMonth)monthBudgets[m]=clone(u)})}persist();$("budgetSaveMessage").textContent="Budget saved.";renderAll();setTimeout(()=>{$("budgetEditor").hidden=true;$("editBudgetsBtn").textContent="Edit budgets";$("budgetSaveMessage").textContent=""},700)});
+$("stageCategoryBtn").addEventListener("click",()=>{const n=$("newCategoryName").value.trim(),v=Number($("newCategoryBudget").value);if(!n||!Number.isFinite(v)||v<0){$("budgetSaveMessage").textContent="Enter a name and valid budget.";return}const l=document.createElement("label");l.textContent=n;const i=document.createElement("input");i.type="number";i.min="0";i.step="1";i.value=roundMoneyValue(v);i.dataset.category=n;l.appendChild(i);$("budgetFields").appendChild(l);$("newCategoryName").value="";$("newCategoryBudget").value="";$("budgetSaveMessage").textContent="Category staged. Tap Save budgets."});
+$("saveBudgetsBtn").addEventListener("click",()=>{const u={};$("budgetFields").querySelectorAll("input[data-category]").forEach(i=>{const v=Number(i.value);if(Number.isFinite(v)&&v>=0)u[i.dataset.category]=roundMoneyValue(v)});const sc=document.querySelector('input[name="budgetScope"]:checked')?.value||"month";monthBudgets[selectedMonth]=clone(u);if(sc==="future"){templateBudgets=clone(u);Object.keys(monthBudgets).forEach(m=>{if(m>selectedMonth)monthBudgets[m]=clone(u)})}persist();$("budgetSaveMessage").textContent="Budget saved.";renderAll();setTimeout(()=>{$("budgetEditor").hidden=true;$("editBudgetsBtn").textContent="Edit budgets";$("budgetSaveMessage").textContent=""},700)});
 
 $("openSpecialCreatorBtn").addEventListener("click",()=>{$("specialCreator").hidden=false});
 $("closeSpecialCreatorBtn").addEventListener("click",()=>{$("specialCreator").hidden=true});
 document.querySelectorAll(".type-btn").forEach(b=>b.addEventListener("click",()=>{selectedSpecialType=b.dataset.type;document.querySelectorAll(".type-btn").forEach(x=>x.classList.toggle("active",x===b));$("travelCreatorFields").hidden=selectedSpecialType!=="travel"}));
 $("specialBudgetForm").addEventListener("submit",e=>{
   e.preventDefault();const name=$("specialName").value.trim(),alloc=Number($("specialAllocation").value),start=$("specialStart").value,end=$("specialEnd").value;
-  if(!name||!Number.isFinite(alloc)||alloc<=0||alloc>reserveTwd||!start||!end||end<start){$("specialCreateMessage").textContent=alloc>reserveTwd?"Allocation is larger than your available cash reserve.":"Check the name, amount, and dates.";return}
-  let currency="TWD",fx=1;if(selectedSpecialType==="travel"){currency=$("specialCurrency").value;fx=Number($("specialFxRate").value);if(!Number.isFinite(fx)||fx<=0){$("specialCreateMessage").textContent="Enter a valid FX rate.";return}}
-  reserveTwd-=alloc;
-  const s={id:uid("special"),type:selectedSpecialType,name,allocatedTwd:alloc,startDate:start,endDate:end,localCurrency:currency,fxRate:fx,categories:clone(DEFAULT_SPECIAL_CATEGORIES[selectedSpecialType]),wallets:[],expenses:[],transfers:[],status:"active",createdAt:Date.now(),returnedTwd:0};
+  if(!name||!Number.isFinite(alloc)||alloc<=0||alloc>reserveBase||!start||!end||end<start){$("specialCreateMessage").textContent=alloc>reserveBase?"Allocation is larger than your available cash reserve.":"Check the name, amount, and dates.";return}
+  let currency=baseCurrency(),fx=1;if(selectedSpecialType==="travel"){currency=$("specialCurrency").value;fx=Number($("specialFxRate").value);if(!Number.isFinite(fx)||fx<=0){$("specialCreateMessage").textContent="Enter a valid FX rate.";return}}
+  reserveBase-=alloc;
+  const s={id:uid("special"),type:selectedSpecialType,name,allocatedBase:alloc,startDate:start,endDate:end,localCurrency:currency,fxRate:fx,categories:clone(DEFAULT_SPECIAL_CATEGORIES[selectedSpecialType]),wallets:[],expenses:[],transfers:[],status:"active",createdAt:Date.now(),returnedBase:0,retainedUnreturnedBase:0};
   specialBudgets.push(s);selectedSpecialId=s.id;$("specialBudgetForm").reset();$("specialStart").value=todayISO();$("specialEnd").value=todayISO();$("specialCreator").hidden=true;persist();renderAll();renderSpecialPanel();renderTabs("special")
 });
 
 $("specialDisplayCurrency").addEventListener("change",()=>{
   const s=specialById(selectedSpecialId);if(!s)return;
   const code=$("specialDisplayCurrency").value;
-  if(code==="TWD")$("specialDisplayFxRate").value="1";
+  if(code===baseCurrency())$("specialDisplayFxRate").value="1";
   else if(code===specialCurrencyCode(s)&&Number(s.fxRate)>0)$("specialDisplayFxRate").value=Number(s.fxRate);
   updateSpecialCurrencyPreview(s)
 });
@@ -576,25 +805,25 @@ $("specialDisplayFxRate").addEventListener("input",()=>{
 $("saveSpecialCurrencyBtn").addEventListener("click",()=>{
   const s=specialById(selectedSpecialId);if(!s)return;
   const code=$("specialDisplayCurrency").value;
-  const rate=code==="TWD"?1:Number($("specialDisplayFxRate").value);
-  if(code!=="TWD"&&(!Number.isFinite(rate)||rate<=0)){
+  const rate=code===baseCurrency()?1:Number($("specialDisplayFxRate").value);
+  if(code!==baseCurrency()&&(!Number.isFinite(rate)||rate<=0)){
     $("specialCurrencyMessage").textContent="Enter a valid FX rate.";
     return
   }
   s.localCurrency=code;
   s.fxRate=rate;
-  $("specialCurrencyMessage").textContent=code==="TWD"?"Secondary currency hidden for this Special Budget.":`Saved ${code}: 1 ${code} = NT$${rate.toLocaleString("en-US",{maximumFractionDigits:6})}.`;
+  $("specialCurrencyMessage").textContent=code===baseCurrency()?"Secondary currency hidden for this Special Budget.":`Saved ${code}: 1 ${code} = ${currencyText(rate,baseCurrency())}.`;
   persist();renderAll();renderSpecialPanel()
 });
 
 $("increaseSpecialBtn").addEventListener("click",()=>{$("increaseSpecialForm").hidden=!$("increaseSpecialForm").hidden});
-$("saveIncreaseSpecialBtn").addEventListener("click",()=>{const s=specialById(selectedSpecialId),v=Number($("increaseSpecialAmount").value);if(!s||!Number.isFinite(v)||v<=0||v>reserveTwd){$("specialActionMessage").textContent=v>reserveTwd?"Not enough available reserve.":"Enter a valid amount.";return}reserveTwd-=v;s.allocatedTwd=Number(s.allocatedTwd||0)+v;$("increaseSpecialAmount").value="";$("increaseSpecialForm").hidden=true;persist();renderAll();renderSpecialPanel()});
+$("saveIncreaseSpecialBtn").addEventListener("click",()=>{const s=specialById(selectedSpecialId),v=Number($("increaseSpecialAmount").value);if(!s||!Number.isFinite(v)||v<=0||v>reserveBase){$("specialActionMessage").textContent=v>reserveBase?"Not enough available reserve.":"Enter a valid amount.";return}reserveBase-=v;s.allocatedBase=Number(s.allocatedBase||0)+v;$("increaseSpecialAmount").value="";$("increaseSpecialForm").hidden=true;persist();renderAll();renderSpecialPanel()});
 $("finishSpecialBtn").addEventListener("click",()=>{const s=specialById(selectedSpecialId);if(!s)return;$("finishReturnAmount").value=Math.max(0,Math.floor(specialRemaining(s)));$("finishSpecialForm").hidden=!$("finishSpecialForm").hidden});
-$("confirmFinishSpecialBtn").addEventListener("click",()=>{const s=specialById(selectedSpecialId),rem=Math.max(0,specialRemaining(s)),ret=Number($("finishReturnAmount").value);if(!s||!Number.isFinite(ret)||ret<0||ret>rem){$("specialActionMessage").textContent="Return amount must be between NT$0 and the remaining allocation.";return}reserveTwd+=ret;s.returnedTwd=ret;s.retainedUnreturnedTwd=rem-ret;s.status="archived";s.closedAt=todayISO();selectedSpecialId="";persist();renderAll();renderTabs("budget")});
+$("confirmFinishSpecialBtn").addEventListener("click",()=>{const s=specialById(selectedSpecialId),rem=Math.max(0,specialRemaining(s)),ret=Number($("finishReturnAmount").value);if(!s||!Number.isFinite(ret)||ret<0||ret>rem){$("specialActionMessage").textContent=`Return amount must be between ${money(0)} and the remaining allocation.`;return}reserveBase+=ret;s.returnedBase=ret;s.retainedUnreturnedBase=rem-ret;s.status="archived";s.closedAt=todayISO();selectedSpecialId="";persist();renderAll();renderTabs("budget")});
 
 $("specialExpenseForm").addEventListener("submit",e=>{
   e.preventDefault();const s=specialById(selectedSpecialId);if(!s)return;
-  const cur=s.type==="travel"?$("specialExpenseCurrency").value:"TWD",fx=s.type==="travel"?Number($("specialExpenseFx").value):1,wid=s.type==="travel"?$("specialExpenseWallet").value:"";
+  const cur=s.type==="travel"?$("specialExpenseCurrency").value:baseCurrency(),fx=s.type==="travel"?Number($("specialExpenseFx").value):1,wid=s.type==="travel"?$("specialExpenseWallet").value:"";
   const x=addSpecialExpense(s,{originalAmount:$("specialExpenseAmount").value,currency:cur,fxRate:fx,category:$("specialExpenseCategory").value,walletId:wid,date:$("specialExpenseDate").value,note:$("specialExpenseNote").value.trim()});
   if(!x){$("specialExpenseMessage").textContent="Check the amount, FX rate and wallet.";return}
   const over=-specialRemaining(s);$("specialExpenseMessage").textContent=over>0?`Expense saved. This Special Budget is ${money(over)} over budget.`:"Expense saved.";
@@ -614,8 +843,8 @@ $("showSpecialCategoryEditorBtn").addEventListener("click",()=>{
     $("showSpecialCategoryEditorBtn").textContent="Edit";
   }
 });
-$("addSpecialCategoryBtn").addEventListener("click",()=>{const s=specialById(selectedSpecialId),n=$("specialNewCategoryName").value.trim(),v=Number($("specialNewCategoryBudget").value);if(!s||!n||!Number.isFinite(v)||v<0)return;s.categories[n]=Math.round(v);$("specialNewCategoryName").value="";$("specialNewCategoryBudget").value="";renderSpecialCategories(s)});
-$("saveSpecialCategoriesBtn").addEventListener("click",()=>{const s=specialById(selectedSpecialId);if(!s)return;const u={};$("specialCategoryFields").querySelectorAll("input[data-category]").forEach(i=>{const v=Number(i.value);if(Number.isFinite(v)&&v>=0)u[i.dataset.category]=Math.round(v)});s.categories=u;persist();$("specialCategoryEditor").hidden=true;$("showSpecialCategoryEditorBtn").textContent="Edit";renderSpecialPanel()});
+$("addSpecialCategoryBtn").addEventListener("click",()=>{const s=specialById(selectedSpecialId),n=$("specialNewCategoryName").value.trim(),v=Number($("specialNewCategoryBudget").value);if(!s||!n||!Number.isFinite(v)||v<0)return;s.categories[n]=roundMoneyValue(v);$("specialNewCategoryName").value="";$("specialNewCategoryBudget").value="";renderSpecialCategories(s)});
+$("saveSpecialCategoriesBtn").addEventListener("click",()=>{const s=specialById(selectedSpecialId);if(!s)return;const u={};$("specialCategoryFields").querySelectorAll("input[data-category]").forEach(i=>{const v=Number(i.value);if(Number.isFinite(v)&&v>=0)u[i.dataset.category]=roundMoneyValue(v)});s.categories=u;persist();$("specialCategoryEditor").hidden=true;$("showSpecialCategoryEditorBtn").textContent="Edit";renderSpecialPanel()});
 
 $("specialWalletForm").addEventListener("submit",e=>{e.preventDefault();const s=specialById(selectedSpecialId),name=$("specialWalletName").value.trim(),bal=Number($("specialWalletBalance").value),cur=$("specialWalletCurrency").value;if(!s||s.type!=="travel"||!name||!Number.isFinite(bal)||bal<0)return;s.wallets.push({id:uid("wallet"),name,currency:cur,balance:bal});$("specialWalletForm").reset();persist();renderSpecialPanel()});
 $("specialTransferForm").addEventListener("submit",e=>{
@@ -632,17 +861,41 @@ $("undoBtn").addEventListener("click",()=>{if(!lastUndo)return;if(lastUndo.kind=
 $("trendCategory").addEventListener("change",renderCategoryTrend);
 $("clearSelectedMonthBtn").addEventListener("click",()=>{if(!confirm(`Delete ALL regular expenses for ${monthLabel(selectedMonth)}? Special Budget activity will not be touched.`))return;regularExpenses=regularExpenses.filter(e=>monthKey(e.date)!==selectedMonth||isMigratedV6TripExpense(e));persist();renderAll()});
 
-$("exportBackupBtn").addEventListener("click",()=>{const data={version:7.5,exportedAt:new Date().toISOString(),reserveTwd,templateBudgets,monthBudgets,regularExpenses,specialBudgets,settings};downloadText(`budget-tracker-backup-${todayISO()}.json`,JSON.stringify(data,null,2),"application/json");$("backupMessage").textContent="Backup exported."});
+$("exportBackupBtn").addEventListener("click",()=>{const data={version:8,exportedAt:new Date().toISOString(),reserveBase,templateBudgets,monthBudgets,regularExpenses,specialBudgets,settings};downloadText(`budget-tracker-backup-${todayISO()}.json`,JSON.stringify(data,null,2),"application/json");$("backupMessage").textContent="Backup exported."});
 $("exportCsvBtn").addEventListener("click",()=>{
-  const header=["Scope","Special_Budget","Date","Category","Original_Amount","Currency","FX_to_TWD","Amount_TWD","Note"],rows=[];
-  regularExpenses.filter(e=>!isMigratedV6TripExpense(e)).forEach(e=>rows.push(["Regular","",e.date,e.category,e.amount,"TWD",1,e.amount,e.note||""]));
-  specialBudgets.forEach(s=>(s.expenses||[]).forEach(e=>rows.push(["Special",s.name,e.date,e.category,e.originalAmount,e.currency,e.fxRate,e.amountTwd,e.note||""])));
+  const header=["Scope","Special_Budget","Date","Category","Original_Amount","Currency","FX_to_Base","Amount_Base","Base_Currency","Note"],rows=[];
+  regularExpenses.filter(e=>!isMigratedV6TripExpense(e)).forEach(e=>rows.push(["Regular","",e.date,e.category,e.amount,baseCurrency(),1,e.amount,baseCurrency(),e.note||""]));
+  specialBudgets.forEach(s=>(s.expenses||[]).forEach(e=>rows.push(["Special",s.name,e.date,e.category,e.originalAmount,e.currency,e.fxRate,e.amountBase,baseCurrency(),e.note||""])));
   const csv=[header,...rows].map(r=>r.map(csvEscape).join(",")).join("\n");downloadText(`budget-expenses-${todayISO()}.csv`,csv,"text/csv;charset=utf-8");$("backupMessage").textContent="CSV exported."
 });
 $("importBackupInput").addEventListener("change",async e=>{
-  const file=e.target.files?.[0];if(!file)return;try{const d=JSON.parse(await file.text());if(!d||!Array.isArray(d.regularExpenses)&&!Array.isArray(d.expenses))throw new Error();if(!confirm("Import this backup and replace data on this device?")){e.target.value="";return}
-    reserveTwd=Math.max(0,Number(d.reserveTwd??d.cashReserve??reserveTwd)||0);templateBudgets=d.templateBudgets||clone(DEFAULT_BUDGETS);monthBudgets=d.monthBudgets||{};regularExpenses=normalizeRegular(d.regularExpenses||d.expenses||[]);specialBudgets=Array.isArray(d.specialBudgets)?d.specialBudgets:[];settings={...settings,...(d.settings||{})};if(!settings.theme)settings.theme="earthy-sunset";applyTheme();selectedMonth=currentMonthKey();selectedSpecialId="";persist();renderAll();renderTabs("budget");$("backupMessage").textContent="Backup imported successfully."
-  }catch{$("backupMessage").textContent="Could not import this backup file."}finally{e.target.value=""}
+  const file=e.target.files?.[0];if(!file)return;
+  try{
+    const d=JSON.parse(await file.text());
+    if(!d||(!Array.isArray(d.regularExpenses)&&!Array.isArray(d.expenses)))throw new Error();
+    if(!confirm("Import this backup and replace data on this device?")){e.target.value="";return}
+
+    const incomingSettings={...DEFAULT_SETTINGS,...(d.settings||{})};
+    // Backups made before v8 were TWD accounting files.
+    if(!(d.settings&&d.settings.baseCurrency))incomingSettings.baseCurrency="TWD";
+    if(!(d.settings&&d.settings.displayCurrency))incomingSettings.displayCurrency=incomingSettings.baseCurrency;
+    if(!(d.settings&&Number(d.settings.displayFxToBase)>0))incomingSettings.displayFxToBase=1;
+    if(!(d.settings&&Number(d.settings.cashGoalBase)>=0))incomingSettings.cashGoalBase=300000;
+    if(!Array.isArray(incomingSettings.quickCategories))incomingSettings.quickCategories=clone(DEFAULT_SETTINGS.quickCategories);
+    incomingSettings.theme="classic-functional";
+
+    settings=incomingSettings;
+    reserveBase=Math.max(0,Number(d.reserveBase ?? d.reserveTwd ?? d.cashReserve ?? 0)||0);
+    templateBudgets=d.templateBudgets||clone(DEFAULT_BUDGETS);
+    monthBudgets=d.monthBudgets||{};
+    regularExpenses=normalizeRegular(d.regularExpenses||d.expenses||[]);
+    specialBudgets=normalizeSpecialBudgets(Array.isArray(d.specialBudgets)?d.specialBudgets:[]);
+    selectedMonth=currentMonthKey();selectedSpecialId="";
+    applyTheme();persist();renderAll();renderTabs("budget");
+    $("backupMessage").textContent=`Backup imported. Base currency: ${baseCurrency()}.`;
+  }catch{
+    $("backupMessage").textContent="Could not import this backup file.";
+  }finally{e.target.value=""}
 });
 
 

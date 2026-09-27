@@ -30,6 +30,7 @@
     <span id="specialTabMount" class="special-tab-mount"></span>
     <button class="tab-btn" data-tab="insights" type="button">Insights</button>
     <button class="tab-btn" data-tab="history" type="button">History</button>
+    <button class="tab-btn" data-tab="settings" type="button">Settings</button>
   </nav>
 
   <!-- MAIN BUDGET -->
@@ -39,18 +40,18 @@
         <div class="card-head compact">
           <div>
             <span class="card-label">Available cash reserve</span>
-            <strong id="cashReserve">NT$••••••</strong>
+            <strong id="cashReserve">••••••</strong>
           </div>
           <button id="privacyBtn" class="icon-btn" type="button" aria-label="Show private balances">👁</button>
         </div>
         <div class="progress"><div id="goalBar" class="progress-fill"></div></div>
         <div class="reserve-meta">
           <span id="goalPercent">•••%</span>
-          <span id="goalRemaining">NT$•••••• to goal</span>
+          <span id="goalRemaining">•••••• to goal</span>
         </div>
         <button id="toggleReserveEditorBtn" class="text-btn" type="button">Update reserve</button>
         <div id="reserveEditor" class="inline-editor" hidden>
-          <label for="reserveInput">Available reserve (NT$)</label>
+          <label id="reserveInputLabel" for="reserveInput">Available reserve</label>
           <div class="inline-input">
             <input id="reserveInput" type="number" min="0" step="1" inputmode="numeric" />
             <button id="saveReserveBtn" class="primary" type="button">Save</button>
@@ -60,10 +61,10 @@
 
       <article class="card">
         <span class="card-label">Special budgets</span>
-        <strong id="activeSpecialRemaining">NT$0</strong>
+        <strong id="activeSpecialRemaining">0</strong>
         <div class="metric-row">
-          <span><b id="activeSpecialAllocated">NT$0</b> allocated</span>
-          <span><b id="activeSpecialSpent">NT$0</b> spent</span>
+          <span><b id="activeSpecialAllocated">0</b> allocated</span>
+          <span><b id="activeSpecialSpent">0</b> spent</span>
         </div>
         <p class="helper">Allocated money has already been removed from your cash reserve.</p>
       </article>
@@ -85,9 +86,9 @@
         </div>
       </div>
       <div class="summary-grid">
-        <div><span>Budget</span><strong id="monthlyBudget">NT$0</strong></div>
-        <div><span>Spent</span><strong id="monthlySpent">NT$0</strong></div>
-        <div><span>Remaining</span><strong id="monthlyRemaining">NT$0</strong></div>
+        <div><span>Budget</span><strong id="monthlyBudget">0</strong></div>
+        <div><span>Spent</span><strong id="monthlySpent">0</strong></div>
+        <div><span>Remaining</span><strong id="monthlyRemaining">0</strong></div>
       </div>
       <div class="progress"><div id="monthBudgetBar" class="progress-fill"></div></div>
       <p id="paceMessage" class="helper"></p>
@@ -104,8 +105,8 @@
 
       <form id="quickExpenseForm" class="quick-form">
         <div class="amount-wrap">
-          <span>NT$</span>
-          <input id="quickAmount" type="number" min="1" step="1" inputmode="decimal" placeholder="180" required />
+          <span id="quickBaseCurrency">TWD</span>
+          <input id="quickAmount" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="180" required />
         </div>
         <button class="primary" type="submit">Add</button>
       </form>
@@ -113,8 +114,8 @@
       <p id="quickMessage" class="message" aria-live="polite"></p>
 
       <form id="detailExpenseForm" class="detail-form" hidden>
-        <label>Amount (NT$)
-          <input id="detailAmount" type="number" min="1" step="1" inputmode="decimal" required />
+        <label>Amount (<span id="detailBaseCurrency">TWD</span>)
+          <input id="detailAmount" type="number" min="0.01" step="0.01" inputmode="decimal" required />
         </label>
         <label>Category
           <select id="detailCategory" required></select>
@@ -155,8 +156,8 @@
           <label>Name
             <input id="newCategoryName" type="text" maxlength="40" />
           </label>
-          <label>Budget (NT$)
-            <input id="newCategoryBudget" type="number" min="0" step="1" inputmode="numeric" />
+          <label>Budget (<span id="newCategoryBaseCurrency">TWD</span>)
+            <input id="newCategoryBudget" type="number" min="0" step="0.01" inputmode="numeric" />
           </label>
         </div>
         <button id="stageCategoryBtn" class="secondary" type="button">Add to editor</button>
@@ -201,8 +202,8 @@
         <label>Name
           <input id="specialName" type="text" maxlength="50" placeholder="Japan 2026" required />
         </label>
-        <label>Allocate from reserve (NT$)
-          <input id="specialAllocation" type="number" min="1" step="1" inputmode="numeric" required />
+        <label>Allocate from reserve (<span id="specialAllocationBaseCurrency">TWD</span>)
+          <input id="specialAllocation" type="number" min="0.01" step="0.01" inputmode="numeric" required />
         </label>
         <label>Start date
           <input id="specialStart" type="date" required />
@@ -223,9 +224,9 @@
                 <option value="TWD">TWD</option>
               </select>
             </label>
-            <label>FX to TWD
+            <label>FX to <span id="specialCreateBaseCurrency">TWD</span>
               <input id="specialFxRate" type="number" min="0.000001" step="0.000001" inputmode="decimal" placeholder="0.22" />
-              <small>Example: ¥1 ≈ NT$0.22 → enter 0.22</small>
+              <small id="specialCreateFxHelp">Example: 1 local unit = 0.22 base units.</small>
             </label>
           </div>
         </div>
@@ -245,10 +246,10 @@
       </article>
       <article class="card">
         <span class="card-label">Remaining</span>
-        <strong id="specialRemaining">NT$0</strong>
+        <strong id="specialRemaining">0</strong>
         <div class="metric-row">
-          <span><b id="specialAllocated">NT$0</b> allocated</span>
-          <span><b id="specialSpent">NT$0</b> spent</span>
+          <span><b id="specialAllocated">0</b> allocated</span>
+          <span><b id="specialSpent">0</b> spent</span>
         </div>
         <div class="progress"><div id="specialProgressBar" class="progress-fill"></div></div>
         <div id="specialOverallStatusWrap" class="special-status-line">
@@ -269,13 +270,13 @@
         <label>Currency
           <select id="specialDisplayCurrency"></select>
         </label>
-        <label>FX to TWD
+        <label>FX to <span id="specialDisplayBaseCurrency">TWD</span>
           <input id="specialDisplayFxRate" type="number" min="0.000001" step="0.000001" inputmode="decimal" />
-          <small id="specialDisplayFxHelp">1 local unit = NT$1</small>
+          <small id="specialDisplayFxHelp">1 local unit = 1 base unit</small>
         </label>
       </div>
       <div class="currency-settings-footer">
-        <p id="specialCurrencyPreview" class="helper">NT$1,000</p>
+        <p id="specialCurrencyPreview" class="helper">Base 1,000</p>
         <button id="saveSpecialCurrencyBtn" class="secondary" type="button">Save currency</button>
       </div>
       <p class="helper">NTD remains the main accounting currency. This setting only adds a subtle local-currency reference inside this Special Budget.</p>
@@ -289,16 +290,16 @@
       </div>
 
       <div id="increaseSpecialForm" class="inline-editor" hidden>
-        <label>Additional allocation from reserve (NT$)
-          <input id="increaseSpecialAmount" type="number" min="1" step="1" inputmode="numeric" />
+        <label>Additional allocation from reserve (<span id="increaseSpecialBaseCurrency">TWD</span>)
+          <input id="increaseSpecialAmount" type="number" min="0.01" step="0.01" inputmode="numeric" />
         </label>
         <button id="saveIncreaseSpecialBtn" class="primary" type="button">Allocate</button>
       </div>
 
       <div id="finishSpecialForm" class="inline-editor" hidden>
         <p class="helper">Choose how much of the unspent allocation to return to your cash reserve. Any amount not returned remains recorded as unreturned/retained value.</p>
-        <label>Return to reserve (NT$)
-          <input id="finishReturnAmount" type="number" min="0" step="1" inputmode="numeric" />
+        <label>Return to reserve (<span id="finishSpecialBaseCurrency">TWD</span>)
+          <input id="finishReturnAmount" type="number" min="0" step="0.01" inputmode="numeric" />
         </label>
         <button id="confirmFinishSpecialBtn" class="primary" type="button">Finish & archive</button>
       </div>
@@ -322,7 +323,7 @@
         <label id="specialExpenseCurrencyWrap">Currency
           <select id="specialExpenseCurrency"></select>
         </label>
-        <label id="specialExpenseFxWrap">FX to TWD
+        <label id="specialExpenseFxWrap">FX to <span id="specialExpenseBaseCurrency">TWD</span>
           <input id="specialExpenseFx" type="number" min="0.000001" step="0.000001" inputmode="decimal" value="1" required />
         </label>
         <label id="specialExpenseWalletWrap">Paid from
@@ -354,8 +355,8 @@
           <label>New category
             <input id="specialNewCategoryName" type="text" maxlength="40" />
           </label>
-          <label>Budget (NT$)
-            <input id="specialNewCategoryBudget" type="number" min="0" step="1" inputmode="numeric" />
+          <label>Budget (<span id="specialCategoryBaseCurrency">TWD</span>)
+            <input id="specialNewCategoryBudget" type="number" min="0" step="0.01" inputmode="numeric" />
           </label>
         </div>
         <div class="special-actions">
@@ -456,8 +457,8 @@
       </div>
       <div id="categoryTrendChart" class="line-chart-wrap"></div>
       <div class="mini-stats">
-        <div><span>Average</span><strong id="trendAverage">NT$0</strong></div>
-        <div><span>Budget</span><strong id="trendBudget">NT$0</strong></div>
+        <div><span>Average</span><strong id="trendAverage">0</strong></div>
+        <div><span>Budget</span><strong id="trendBudget">0</strong></div>
         <div><span>Direction</span><strong id="trendDirection">—</strong></div>
       </div>
     </section>
@@ -503,6 +504,100 @@
         <input id="importBackupInput" type="file" accept="application/json,.json" hidden />
       </div>
       <p id="backupMessage" class="message" aria-live="polite"></p>
+    </section>
+  </section>
+
+
+  <!-- SETTINGS -->
+  <section id="tab-settings" class="tab-panel" hidden>
+    <section class="card">
+      <div class="card-head">
+        <div>
+          <p class="eyebrow">Financial profile</p>
+          <h2>Accounting currency</h2>
+        </div>
+      </div>
+      <div class="setting-summary">
+        <span>Current base currency</span>
+        <strong id="currentBaseCurrency">TWD</strong>
+      </div>
+      <label class="setting-label">Change base currency
+        <select id="settingsBaseCurrency"></select>
+      </label>
+      <div id="baseCurrencyMigrationBox" class="settings-box" hidden>
+        <p id="baseCurrencyMigrationText" class="helper"></p>
+        <label id="baseMigrationRateLabel" class="setting-label">Conversion rate
+          <input id="baseMigrationRate" type="number" min="0.000001" step="0.000001" inputmode="decimal" placeholder="1.0" />
+        </label>
+        <small id="baseMigrationHelp" class="helper"></small>
+        <button id="saveBaseCurrencyBtn" class="primary" type="button">Change base currency</button>
+      </div>
+      <p id="baseCurrencyMessage" class="message" aria-live="polite"></p>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <div>
+          <p class="eyebrow">Main budget view</p>
+          <h2>Display currency</h2>
+        </div>
+      </div>
+      <p class="helper">Your records remain stored in the base currency. This only changes how the main budget is displayed.</p>
+      <div class="two-col">
+        <label>Display currency
+          <select id="settingsDisplayCurrency"></select>
+        </label>
+        <label>FX to base currency
+          <input id="settingsDisplayFxRate" type="number" min="0.000001" step="0.000001" inputmode="decimal" />
+          <small id="settingsDisplayFxHelp"></small>
+        </label>
+      </div>
+      <p id="displayCurrencyPreview" class="helper"></p>
+      <button id="saveDisplayCurrencyBtn" class="secondary" type="button">Save display currency</button>
+      <p id="displayCurrencyMessage" class="message" aria-live="polite"></p>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <div>
+          <p class="eyebrow">Goal</p>
+          <h2>Cash reserve goal</h2>
+        </div>
+      </div>
+      <label class="setting-label">Goal (<span id="cashGoalBaseCurrency">TWD</span>)
+        <input id="cashGoalInput" type="number" min="0" step="0.01" inputmode="numeric" />
+      </label>
+      <p id="cashGoalPreview" class="helper"></p>
+      <button id="saveCashGoalBtn" class="secondary" type="button">Save cash goal</button>
+      <p id="cashGoalMessage" class="message" aria-live="polite"></p>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <div>
+          <p class="eyebrow">Daily use</p>
+          <h2>Quick Entry categories</h2>
+        </div>
+      </div>
+      <p class="helper">Choose the categories you are most likely to enter every day. All categories remain available under More details.</p>
+      <div id="quickCategorySettings" class="checkbox-grid"></div>
+      <button id="saveQuickCategoriesBtn" class="secondary" type="button">Save Quick Entry</button>
+      <p id="quickCategorySettingsMessage" class="message" aria-live="polite"></p>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <div>
+          <p class="eyebrow">Status colors</p>
+          <h2>Functional color system</h2>
+        </div>
+      </div>
+      <div class="status-legend">
+        <span class="status good">On track</span>
+        <span class="status watch">Watch</span>
+        <span class="status over">Over budget</span>
+      </div>
+      <p class="helper">Green, orange and red are reserved for financial status throughout the app.</p>
     </section>
   </section>
 
