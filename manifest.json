@@ -3,8 +3,8 @@
   "short_name": "Budget Tracker",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#f4f6f8",
-  "theme_color": "#f4f6f8",
+  "background_color": "#f6f7fb",
+  "theme_color": "#f6f7fb",
   "icons": [
     {
       "src": "icons/icon-192.png",
@@ -17,6 +17,6 @@
       "type": "image/png"
     }
   ],
-  "description": "Simple budget: cash and bank balances, income, expenses, fixed and flexible spending.",
+  "description": "Simple budget: balances, expenses, fixed and flexible budget, and savings goals.",
   "scope": "./"
 }

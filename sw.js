@@ -1,5 +1,5 @@
 // Bump CACHE together with APP_VERSION in app.js on every release.
-const CACHE = "budget-tracker-v9-0-0";
+const CACHE = "budget-tracker-v10-0-0";
 const ASSETS = ["./", "./index.html", "./styles.css", "./app.js", "./manifest.json", "./icons/icon-192.png", "./icons/icon-512.png"];
 
 self.addEventListener("install", (event) => {

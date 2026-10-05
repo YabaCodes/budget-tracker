@@ -1,49 +1,62 @@
 # Budget Tracker
 
-A simple monthly budget app for the phone. It keeps track of how much is in **Cash** and in the **Bank Account**, and every income and expense updates those balances automatically.
+A simple monthly budget app for the phone, built on the same design as Wealth OS. It tracks how much is in the **Bank Account** and in **Cash**, updates those balances with every income and expense, and shows what's actually **available to spend** once money set aside for goals is taken out.
 
 Live: https://yabacodes.github.io/budget-tracker/
 
-## What it does
+## Screens
 
-- **Balances.** Two accounts, Cash and Bank Account (the bank one can be renamed). Income adds to an account, expenses take from it, and *Move money* moves money between them. Balances are always worked out from what was recorded, so they can't drift.
-- **Fix balance.** If the bank app or wallet shows a different amount, enter the real number. The difference is recorded as a correction, so nothing changes silently.
-- **Income types.** Salary, Stipend, Gift, Reimbursement, Other.
-- **Budget, in two groups.**
-  - *Fixed*: the same every month (phone, monthly transport pass, …). Home shows what's paid and has a **Pay** button that fills in the usual amount.
-  - *Flexible*: everyday spending (food, household, …), with an optional monthly limit. Home shows **Left to spend**.
-  - Nothing is pre-filled. During setup, and on the Budget screen, there are one-tap suggestions (Business Payment, Phone, Transport, Food, Household). *Others* is always there for anything else.
-  - Changing an amount applies from the current month; past months keep what they had.
-- **Activity.** Every entry by month, with filters, a spending breakdown and six months of money in vs. money out.
-- **Backup.** Export a backup file (or a CSV for a spreadsheet) and import it on a new phone. Home reminds you when a backup is overdue.
-- **Private and offline.** Data stays on the phone (no account, no server). It works offline once installed. *Hide* masks the amounts on screen.
+- **Home**
+  - *Available to spend*, with the Bank Account and Cash balances underneath and any money set aside for goals.
+  - Quick add: Expense, Income, Transfer and Save.
+  - This month's income, spending and savings.
+  - Flexible spending limits, bills still to pay, the current goal and the last few entries.
+- **Budget**
+  - Plan vs actual for the month: income, bills, flexible spending and goal savings.
+  - The monthly plan shows how much of the income is still unplanned.
+  - Bills have a **Record** button that fills in the usual amount.
+- **Activity**
+  - Every entry by month, with filters and a search across all months.
+  - The ⋯ menu on each entry: Repeat expense, Edit, Delete (with Undo).
+- **Goals**
+  - Each goal shows progress, what's left and the pace ("At NT$4,000 a month: Apr 2027").
+  - **Add Money** and **Take Out** move money in and out of a goal.
+- **Settings** (gear icon)
+  - Theme (System / Light / Dark) and accounts (rename, update a balance, withdraw cash).
+  - Categories, with one-tap suggestions: Business Payment, Phone and Transport as monthly bills; Food and Household as everyday spending. *Others* is always there.
+  - Currency, backup and restore, and an activity CSV.
 
-## Install on iPhone
+## How the money works
 
-Open the link in Safari, tap **Share**, then **Add to Home Screen**.
+- **Balances are worked out from what's recorded:** opening balance + income − expenses ± transfers ± balance updates. Editing or deleting an entry corrects them.
+- **Transfers are not spending.** An ATM withdrawal is a transfer from the bank to Cash.
+- **Update balance** records the difference when the bank app or wallet shows another amount, so nothing changes silently.
+- **Goal money stays in the accounts but is set aside.** Available to spend = total balance − goal savings. Setting money aside needs no bank transfer.
+- **Months are calendar months.** Changing a bill or limit applies from the current month; earlier months keep theirs.
 
-## Updating from version 8
+## Updating from earlier versions: a fresh start
 
-The first time version 9 opens, it converts the old data on the phone automatically:
+The first time version 10 opens on a phone that already has data, it starts fresh once:
 
-- The old **reserve** becomes the Bank Account balance, plus any money still set aside in an unfinished Special Budget. Cash starts at 0. Use **Move money** if part of it is actually cash.
-- Categories you created or changed are kept as Flexible items. Untouched default categories are dropped. *Miscellaneous* becomes *Others*. Items can be moved to Fixed from the Budget screen.
-- Past expenses stay in Activity and Budget under their month. They don't change the balance, because the old version never took them off the reserve.
-- Special Budgets and currency conversion are not part of version 9. The old data stays on the phone as a safety copy (**More → Previous version's data**), where it can be downloaded or removed.
-
-Backup files from version 8 can also be imported.
+- **Kept:** the expenses recorded in version 8 (in Activity and Budget, under their month) and the categories, with their amounts.
+  - Version 8 categories that were never changed or used are dropped, and *Miscellaneous* becomes *Others*.
+  - Old expenses don't change the balance, because version 8 never took them off the reserve.
+- **Cleared:** every other money entry, including the version 8 reserve and anything entered in version 9 (balances, income, expenses, transfers, corrections).
+- **Then:** she enters today's bank and cash balances, can add any suggested categories she doesn't have yet, and Home shows a short note explaining the fresh start.
+- **Nothing is lost for good.** The data from before stays on the phone until it is removed in Settings → *Previous version's data*, where it can also be downloaded.
+- **This happens only once.** Restoring a backup file (from version 8, 9 or 10) never triggers it.
 
 ## Files
 
 | File | Purpose |
 | --- | --- |
-| `index.html` | Page shell: header, month switcher, bottom navigation, pop-up form |
-| `app.js` | All app logic: data, calculations, screens, forms, backup, upgrade from v8 |
-| `styles.css` | Styles, light and dark mode |
+| `index.html` | Page shell; applies the saved theme before the first paint |
+| `app.js` | All app logic: data, calculations, screens, forms, backup, upgrades from v8 and v9 |
+| `styles.css` | The Wealth OS design system (the parts this app uses) plus a few additions at the end |
 | `sw.js` | Offline support (network first, so updates show up on the next launch) |
 | `manifest.json`, `icons/` | Home-screen app details |
 
-Data is saved in the browser's `localStorage` under `budgetTracker.v9`.
+Data is saved in the browser's `localStorage` under `budgetTracker.v10`.
 
 ## Releasing a change
 
