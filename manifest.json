@@ -1,10 +1,10 @@
 {
-  "name": "Personal Budget & Expense Tracker",
+  "name": "Budget Tracker",
   "short_name": "Budget Tracker",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#f4f6f8",
-  "theme_color": "#111827",
+  "theme_color": "#f4f6f8",
   "icons": [
     {
       "src": "icons/icon-192.png",
@@ -16,5 +16,7 @@
       "sizes": "512x512",
       "type": "image/png"
     }
-  ]
+  ],
+  "description": "Simple budget: cash and bank balances, income, expenses, fixed and flexible spending.",
+  "scope": "./"
 }
